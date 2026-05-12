@@ -27,12 +27,16 @@
   </p>
 
   <br/>
-  <a href="https://youtu.be/SWpNphnuPpQ">
+  <a href="https://youtu.be/ivljtZqsxeo">
     <img src="https://img.shields.io/badge/▶_Watch_Demo-YouTube-red?style=for-the-badge&logo=youtube" alt="Watch the Demo">
   </a>
   &nbsp;
   <a href="https://github.com/abilityai/trinity-ops-public">
     <img src="https://img.shields.io/badge/🤖_Ops_Agent-GitHub-black?style=for-the-badge&logo=github" alt="Trinity Ops Agent">
+  </a>
+  <br/><br/>
+  <a href="https://youtu.be/ivljtZqsxeo">
+    <img src="https://img.youtube.com/vi/ivljtZqsxeo/maxresdefault.jpg" alt="Trinity Platform Demo — Click to Watch" width="800"/>
   </a>
   <br/><br/>
   <img src="docs/assets/screenshots/graph-view-fleet.png" alt="Trinity Agent Fleet — Graph View" width="800"/>
@@ -613,7 +617,6 @@ EMAIL_PROVIDER=console  # Use 'resend' or 'smtp' for production
 
 - [**User Documentation**](docs/user-docs/README.md) — Complete guide for UI workflows, agent management, and API reference
 - [**User Scenarios**](docs/user-scenarios/README.md) — Step-by-step task walkthroughs (CLI, UI, API)
-- [Development Workflow](docs/DEVELOPMENT_WORKFLOW.md) — How to develop Trinity (context loading, testing, documentation)
 - [Deployment Guide](docs/DEPLOYMENT.md) — Production deployment instructions
 - [Versioning & Upgrades](docs/VERSIONING_AND_UPGRADES.md) — Version strategy and upgrade procedures
 - [Gemini Support Guide](docs/GEMINI_SUPPORT.md) — Using Gemini CLI runtime for cost optimization
