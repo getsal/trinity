@@ -1,25 +1,24 @@
 # Current State
 
 ## Active Task
-Investigate and fix why commits are failing.
+Commit the backend template-loading fix, then continue remote verification.
 
 ## Current Status
-Commit failure fixed at repository level. Removed stale `.git/index.lock`, stopped stuck Git processes, and set local Git config to ignore file mode churn and untracked scans. `git add -n` now succeeds for selected changed source files.
+Backend now starts on the remote host. `/api/templates` returns `Test Gemini Agent` and local template loading has been patched, but `test-gemini` agent creation still needs a final env check after commit.
 
 ## Next Action
-User can stage selected files and commit. Avoid `git add -A` until AppleDouble/runtime credential noise is cleaned up.
+Commit the intended files only, then retry agent creation and verify `AGENT_RUNTIME` / `AGENT_RUNTIME_MODEL`.
 
 ## Blockers
-Working tree still contains tracked AppleDouble metadata changes and runtime credential/config files; do not bulk stage.
+AppleDouble and unrelated deleted test-utils files are present in the working tree; they should stay uncommitted.
 
 ## Relevant Files
+- src/backend/services/template_service.py
+- src/backend/services/agent_service/crud.py
+- src/backend/routers/templates.py
+- config/agent-templates/test-gemini/template.yaml
 - state/current.md
 - logs/worklog.md
-- .git/index.lock
-- src/backend/services/agent_service/crud.py
-- src/backend/services/template_service.py
-- src/frontend/src/components/ModelSelector.vue
-- src/frontend/src/components/TasksPanel.vue
 
 ## Handover Note
-Git commit path is unblocked. Stage explicit intended files only; do not use `git add -A` while credential/runtime files and AppleDouble artifacts are present.
+Keep the commit narrow. Preserve unrelated metadata noise and continue verification after commit.

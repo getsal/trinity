@@ -26,6 +26,7 @@ from services.docker_utils import (
 )
 from services.template_service import (
     get_github_template,
+    get_local_template,
     generate_credential_files,
 )
 from services import git_service
@@ -243,8 +244,30 @@ async def create_agent_internal(
                     source_mode=config.source_mode,
                 )
             )
-    elif config.template.startswith("local:") or not config.template.startswith("github:"):
-            # Local template - strip "local:" prefix if present
+    else:
+        # Local template - accept both plain ids and local: ids.
+        local_template = get_local_template(config.template)
+        if local_template:
+            template_data = local_template
+            template_name = local_template.get("id", config.template)
+            config.template = template_name
+            config.type = local_template.get("type", config.type)
+            config.resources = local_template.get("resources", config.resources)
+            config.tools = local_template.get("tools", config.tools)
+            config.mcp_servers = list(local_template.get("mcp_servers", [])) or config.mcp_servers
+            runtime_config = local_template.get("runtime", {})
+            if isinstance(runtime_config, dict):
+                config.runtime = runtime_config.get("type", config.runtime)
+                config.runtime_model = runtime_config.get("model", config.runtime_model)
+            elif isinstance(runtime_config, str):
+                config.runtime = runtime_config
+            shared_folders_config = local_template.get("shared_folders", {})
+            if shared_folders_config:
+                template_shared_folders = {
+                    "expose": shared_folders_config.get("expose", False),
+                    "consume": shared_folders_config.get("consume", False)
+                }
+        else:
             template_name = config.template[6:] if config.template.startswith("local:") else config.template
             templates_dir = Path("/agent-configs/templates")
             if not templates_dir.exists():
@@ -345,8 +368,8 @@ async def create_agent_internal(
     if config.template:
         if config.template.startswith("github:"):
             pass  # Agent clones at startup
-       elif config.template.startswith("local:") or not config.template.startswith("github:"):
-    # Local template - strip "local:" prefix if present
+        else:
+            local_template = get_local_template(config.template)
             template_name = config.template[6:] if config.template.startswith("local:") else config.template
             templates_dir = Path("/agent-configs/templates")
             template_path_in_backend = templates_dir / template_name
