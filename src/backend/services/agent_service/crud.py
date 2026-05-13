@@ -297,8 +297,11 @@ async def create_agent_internal(
             template_base_path=github_template_path
         )
 
-    cred_files_dir = Path(f"/tmp/agent-{config.name}-creds")
-    cred_files_dir.mkdir(exist_ok=True)
+    runtime_config_dir = Path(os.getenv("AGENT_CONFIG_RUNTIME_DIR", "/app/runtime/agent-configs"))
+    runtime_config_dir.mkdir(parents=True, exist_ok=True)
+
+    cred_files_dir = runtime_config_dir / f"agent-{config.name}-creds"
+    cred_files_dir.mkdir(parents=True, exist_ok=True)
 
     # Write template-generated files (.env, .mcp.json, etc.)
     for filepath, content in generated_files.items():
@@ -319,11 +322,11 @@ async def create_agent_internal(
         }
     }
 
-    config_path = Path(f"/tmp/agent-{config.name}.yaml")
+    config_path = runtime_config_dir / f"agent-{config.name}.yaml"
     with open(config_path, "w") as f:
         yaml.dump(agent_config, f)
 
-    credentials_path = Path(f"/tmp/agent-{config.name}-credentials.json")
+    credentials_path = runtime_config_dir / f"agent-{config.name}-credentials.json"
     with open(credentials_path, "w") as f:
         json.dump({}, f)  # CRED-002: Empty credentials, injected after creation
 

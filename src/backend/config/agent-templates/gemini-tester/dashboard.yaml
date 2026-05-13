@@ -1,0 +1,43 @@
+title: "Gemini Tester"
+refresh: 300
+updated: "2026-05-13T00:00:00Z"
+
+sections:
+  - title: "Status"
+    layout: grid
+    columns: 3
+    widgets:
+      - type: status
+        label: "Agent Status"
+        value: "Active"
+        color: green
+      - type: metric
+        label: "Last Test"
+        value: "—"
+        description: "Updated by /update-dashboard"
+      - type: metric
+        label: "Tests Run"
+        value: "0"
+
+  - title: "API Health"
+    layout: grid
+    columns: 2
+    widgets:
+      - type: metric
+        label: "Last Model Tested"
+        value: "—"
+      - type: metric
+        label: "Last Latency (ms)"
+        value: "—"
+
+  - title: "Quick Links"
+    layout: list
+    widgets:
+      - type: link
+        label: "Google AI Studio"
+        url: "https://aistudio.google.com"
+        external: true
+      - type: link
+        label: "Gemini API Docs"
+        url: "https://ai.google.dev/docs"
+        external: true

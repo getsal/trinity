@@ -1,0 +1,14 @@
+agent:
+  base_image: trinity-agent-base:latest
+  credentials: {}
+  custom_instructions: null
+  mcp_servers:
+  - description: Gmail, Calendar, Drive, Docs, Sheets, Tasks integration
+    name: google_workspace
+  resources:
+    cpu: '2'
+    memory: 4g
+  tools:
+  - filesystem
+  - web_search
+  type: business-assistant

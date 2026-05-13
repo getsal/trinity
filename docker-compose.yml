@@ -5,7 +5,7 @@ services:
       dockerfile: docker/backend/Dockerfile
     container_name: trinity-backend
     ports:
-      - "8000:8000"
+      - "9000:8000"
     environment:
       # SECURITY: Set these in your .env file, not here
       - SECRET_KEY=${SECRET_KEY:-}  # Required - generate with: openssl rand -hex 32
@@ -50,7 +50,10 @@ services:
       - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
       # SSH access host override
       - SSH_HOST=${SSH_HOST:-}
+      - AGENT_CONFIG_RUNTIME_DIR=/home/ninkyo/repos/trinity/runtime/agent-configs
     volumes:
+      - ./runtime/agent-configs:/home/ninkyo/repos/trinity/runtime/agent-configs
+      - ./runtime/agent-configs:/app/runtime/agent-configs
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./src/backend:/app
       - ./VERSION:/app/VERSION:ro  # Platform version for agent container labels
@@ -202,7 +205,7 @@ services:
       dockerfile: Dockerfile
     container_name: trinity-mcp-server
     ports:
-      - "8080:8080"
+      - "9090:8080"
     environment:
       - NODE_ENV=production
       - MCP_PORT=8080

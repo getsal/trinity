@@ -1,0 +1,10 @@
+name: gemini-tester
+display_name: Gemini Tester
+description: |
+  An agent for testing and validating the Google Gemini API.
+  Sends prompts, inspects responses, and tracks test history to help developers
+  build confidence in their Gemini integrations.
+avatar_prompt: A sharp-eyed software tester in a modern lab coat over a dark t-shirt, surrounded by glowing API request/response panels and model comparison charts, focused expression with a stylus in hand, cool blue and purple lighting, clean minimalist lab environment
+resources:
+  cpu: "2"
+  memory: "4g"

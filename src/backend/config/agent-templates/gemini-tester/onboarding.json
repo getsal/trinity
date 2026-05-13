@@ -1,0 +1,19 @@
+{
+  "phase": "local",
+  "started": "2026-05-13",
+  "steps": {
+    "local": {
+      "env_configured": { "done": false, "label": "Configure environment variables (.env) — set GEMINI_API_KEY" },
+      "first_skill_run": { "done": false, "label": "Run /send-prompt — send your first prompt to Gemini" },
+      "plugins_installed": { "done": false, "label": "Install plugins (agent-dev, trinity," }
+    },
+    "trinity": {
+      "onboarded": { "done": false, "label": "Deploy to Trinity (/trinity:onboard)" },
+      "first_remote_run": { "done": false, "label": "Run a skill remotely via mcp__trinity__chat_with_agent" }
+    },
+    "schedules": {
+      "schedules_configured": { "done": false, "label": "Set up scheduled tasks (mcp__trinity__create_schedule)" },
+      "first_scheduled_run": { "done": false, "label": "Verify first scheduled execution completed" }
+    }
+  }
+}

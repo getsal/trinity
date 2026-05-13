@@ -1,0 +1,10 @@
+name: suzuki
+display_name: Suzuki Agent
+description: |
+  A general-purpose Claude Code agent with Japanese language support,
+  RTK token optimization, structured state management via worklog/state files,
+  and Trinity Deep Agent Orchestration platform integration.
+avatar_prompt: A focused Japanese developer in a clean minimalist workspace, wearing a dark hoodie, surrounded by dual monitors with code and terminal windows, calm and precise expression, soft cool lighting, professional portrait
+resources:
+  cpu: "2"
+  memory: "4g"
