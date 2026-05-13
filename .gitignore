@@ -165,3 +165,12 @@ tests/manual/
 # Trinity remote deployment tracking (contains internal URLs)
 .trinity-remote.yaml
 .trinity-sync.yaml
+
+# --- agent-dev:add-git-sync runtime exclusions ---
+.claude/sessions/
+.claude/telemetry/
+.claude/backups/
+*.key
+*.pem
+credentials.json
+# --- end add-git-sync ---

@@ -323,3 +323,22 @@ The **[abilities](https://github.com/abilityai/abilities)** repo is the canonica
 - **Agent Network Demo**: `docs/AGENT_NETWORK_DEMO.md`
 - **Agent Development Toolkit**: https://github.com/abilityai/abilities
 - **Docs Q&A Bot**: `./scripts/ask-trinity.sh "your question"` or [public endpoint](https://us-central1-mcp-server-project-455215.cloudfunctions.net/ask-trinity)
+
+---
+
+## Git Sync (Automatic)
+
+Three hooks manage git sync for this agent. Defined in `.claude/settings.json`, scripts in `.claude/hooks/`.
+
+| Hook | Script | Purpose |
+|---|---|---|
+| `SessionStart` | `git-session-start.sh` | Auto-stash drift, fetch + rebase onto `origin/main`, restore drift. |
+| `PreCompact` | `git-pre-compact.sh` | Snapshot commit before compaction so mid-flight work survives context loss. No push. |
+| `Stop` (async) | `git-sync.sh` | Commit staged files, push with rebase-on-reject retry (max 2). Honors `.git/SELF_SELECT_MSG` for structured commit messages. |
+
+**Escape hatches:**
+- `touch .git/NO_AUTOSYNC` — disable all three hooks until removed
+- `echo "msg" > .git/SELF_SELECT_MSG` — override Stop-hook commit message (consumed after use)
+- `.git/SYNC_FAILED` — written when push can't reconcile; surfaced in next SessionStart
+
+**Design principle:** hooks enforce session-boundary consistency. Inside a session the agent is free; at boundaries (start / compact / stop) the repo reconciles.
