@@ -243,9 +243,9 @@ async def create_agent_internal(
                     source_mode=config.source_mode,
                 )
             )
-        elif config.template.startswith("local:"):
-            # Local template - strip "local:" prefix
-            template_name = config.template[6:]  # Remove "local:" prefix
+    elif config.template.startswith("local:") or not config.template.startswith("github:"):
+            # Local template - strip "local:" prefix if present
+            template_name = config.template[6:] if config.template.startswith("local:") else config.template
             templates_dir = Path("/agent-configs/templates")
             if not templates_dir.exists():
                 templates_dir = Path("./config/agent-templates")
@@ -283,6 +283,16 @@ async def create_agent_internal(
 
     if config.port is None:
         config.port = get_next_available_port()
+
+    # Multi-runtime fallback: if a Gemini model was selected but runtime was not
+    # explicitly propagated from the UI/template, run the agent with Gemini CLI.
+    effective_runtime = config.runtime or "claude-code"
+    effective_runtime_model = config.runtime_model or ""
+    if effective_runtime == "claude-code" and effective_runtime_model.startswith("gemini-"):
+        effective_runtime = "gemini-cli"
+        logger.info(
+            f"Inferred Gemini runtime for {config.name} from runtime_model={effective_runtime_model}"
+        )
 
     # CRED-002: Credentials are now injected directly into agents after creation
     # via the inject_credentials endpoint, not auto-injected during creation.
@@ -335,9 +345,9 @@ async def create_agent_internal(
     if config.template:
         if config.template.startswith("github:"):
             pass  # Agent clones at startup
-        elif config.template.startswith("local:"):
-            # Local template - strip "local:" prefix for path resolution
-            template_name = config.template[6:]  # Remove "local:" prefix
+       elif config.template.startswith("local:") or not config.template.startswith("github:"):
+    # Local template - strip "local:" prefix if present
+            template_name = config.template[6:] if config.template.startswith("local:") else config.template
             templates_dir = Path("/agent-configs/templates")
             template_path_in_backend = templates_dir / template_name
 
@@ -374,8 +384,8 @@ async def create_agent_internal(
         'AGENT_SERVER_PORT': '8000',
         'TEMPLATE_NAME': config.template if config.template else '',
         # Multi-runtime support
-        'AGENT_RUNTIME': config.runtime or 'claude-code',
-        'AGENT_RUNTIME_MODEL': config.runtime_model or ''
+        'AGENT_RUNTIME': effective_runtime,
+        'AGENT_RUNTIME_MODEL': effective_runtime_model
     }
 
     # GUARD-001: per-agent guardrails overrides (empty by default; baseline
@@ -387,23 +397,27 @@ async def create_agent_internal(
 
     # Auto-assign subscription (round-robin) — #74
     auto_assigned_subscription_id = None
-    try:
-        least_used = db.get_least_used_subscription()
-        if least_used:
-            token = db.get_subscription_token(least_used.id)
-            if token:
-                env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
-                env_vars.pop('ANTHROPIC_API_KEY', None)
-                auto_assigned_subscription_id = least_used.id
-                logger.info(f"Auto-assigned subscription '{least_used.name}' to agent {config.name}")
-            else:
-                logger.warning(f"Failed to decrypt subscription '{least_used.name}' token, using platform API key")
-    except Exception as e:
-        logger.warning(f"Subscription auto-assign failed for {config.name}: {e}")
+    if effective_runtime in ("claude-code", "claude"):
+        try:
+            least_used = db.get_least_used_subscription()
+            if least_used:
+                token = db.get_subscription_token(least_used.id)
+                if token:
+                    env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
+                    env_vars.pop('ANTHROPIC_API_KEY', None)
+                    auto_assigned_subscription_id = least_used.id
+                    logger.info(f"Auto-assigned subscription '{least_used.name}' to agent {config.name}")
+                else:
+                    logger.warning(f"Failed to decrypt subscription '{least_used.name}' token, using platform API key")
+        except Exception as e:
+            logger.warning(f"Subscription auto-assign failed for {config.name}: {e}")
+    else:
+        env_vars.pop('ANTHROPIC_API_KEY', None)
+        logger.info(f"Skipping Claude subscription auto-assign for {config.name}: runtime={effective_runtime}")
 
     # Add Google API key if using Gemini runtime
     # Gemini CLI expects GEMINI_API_KEY environment variable
-    if config.runtime == 'gemini-cli' or config.runtime == 'gemini':
+    if effective_runtime in ('gemini-cli', 'gemini'):
         google_api_key = os.getenv('GOOGLE_API_KEY', '')
         if google_api_key:
             env_vars['GEMINI_API_KEY'] = google_api_key  # Gemini CLI expects this name
@@ -606,7 +620,7 @@ async def create_agent_internal(
                     'trinity.memory': config.resources['memory'],
                     'trinity.created': utc_now_iso(),
                     'trinity.template': config.template or '',
-                    'trinity.agent-runtime': config.runtime or 'claude-code',
+                    'trinity.agent-runtime': effective_runtime,
                     'trinity.full-capabilities': str(full_capabilities).lower(),
                     'trinity.base-image-version': get_platform_version()
                 },

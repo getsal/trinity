@@ -1,0 +1,12 @@
+agent:
+  base_image: trinity-agent-base:latest
+  credentials: {}
+  custom_instructions: null
+  mcp_servers: []
+  resources:
+    cpu: '2'
+    memory: 2g
+  tools:
+  - filesystem
+  - web_search
+  type: business-assistant

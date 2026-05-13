@@ -141,6 +141,12 @@ def _build_template(repo: str, metadata: dict, admin_override: dict = None) -> d
         "github_repo": repo,
         "github_credential_id": GITHUB_PAT_CREDENTIAL_ID,
         "source": "github",
+        "type": metadata.get("type", "business-assistant"),
+        "author": metadata.get("author", "GitHub"),
+        "version": metadata.get("version", ""),
+        "priority": metadata.get("priority", 100),
+        "runtime": metadata.get("runtime", {}),
+        "capabilities": metadata.get("capabilities", []),
         "resources": metadata.get("resources", {"cpu": "2", "memory": "4g"}),
         "skills": metadata.get("skills", []),
         "mcp_servers": metadata.get("mcp_servers", []),
@@ -158,6 +164,72 @@ def _build_template(repo: str, metadata: dict, admin_override: dict = None) -> d
 # Public API
 # ============================================================================
 
+def _load_local_templates() -> List[dict]:
+    """Load host/local templates from config/agent-templates.
+
+    These are the templates used by local/CLI agent creation flows. The UI
+    template endpoint also needs to expose them so local templates can be
+    selected from the dashboard.
+    """
+    from services.git_service import DEFAULT_PERSISTENT_STATE
+
+    local_templates: List[dict] = []
+    candidate_bases = [
+        Path("/agent-configs/templates"),
+        Path("./config/agent-templates"),
+        Path("config/agent-templates"),
+    ]
+
+    local_base = next((base for base in candidate_bases if base.exists()), None)
+    if not local_base:
+        return local_templates
+
+    for template_dir in sorted(local_base.iterdir()):
+        if not template_dir.is_dir():
+            continue
+
+        template_yaml = template_dir / "template.yaml"
+        if not template_yaml.exists():
+            continue
+
+        try:
+            with template_yaml.open("r", encoding="utf-8") as f:
+                metadata = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.warning("Failed to parse local template %s: %s", template_yaml, e)
+            continue
+
+        template_name = metadata.get("name") or template_dir.name
+        display_name = metadata.get("display_name") or template_name
+
+        local_templates.append({
+            "id": template_name,
+            "display_name": display_name,
+            "description": metadata.get("description", ""),
+            "source": "local",
+            "local_path": str(template_dir),
+            "type": metadata.get("type", "business-assistant"),
+            "author": metadata.get("author", "Local"),
+            "version": metadata.get("version", ""),
+            "priority": metadata.get("priority", 100),
+            "resources": metadata.get("resources", {"cpu": "2", "memory": "4g"}),
+            "runtime": metadata.get("runtime", {}),
+            "capabilities": metadata.get("capabilities", []),
+            "skills": metadata.get("skills", []),
+            "mcp_servers": metadata.get("mcp_servers", []),
+            "required_credentials": metadata.get("required_credentials", []),
+            "persistent_state": metadata.get(
+                "persistent_state", list(DEFAULT_PERSISTENT_STATE)
+            ),
+        })
+
+    return local_templates
+
+
+# ============================================================================
+# Public API
+# ============================================================================
+
 def get_all_templates() -> List[dict]:
     """Return the full resolved template list (DB-configured or defaults).
 
@@ -165,23 +237,34 @@ def get_all_templates() -> List[dict]:
     """
     from services.settings_service import get_github_templates
 
+    templates: List[dict] = []
     db_entries = get_github_templates()
 
     if db_entries is not None:
         # Admin-configured list
         repos = [e["github_repo"] for e in db_entries]
         all_metadata = _fetch_all_metadata(repos)
-        return [
+        templates.extend([
             _build_template(e["github_repo"], all_metadata.get(e["github_repo"], {}), e)
             for e in db_entries
-        ]
+        ])
     else:
         # Defaults
         all_metadata = _fetch_all_metadata(DEFAULT_GITHUB_TEMPLATE_REPOS)
-        return [
+        templates.extend([
             _build_template(repo, all_metadata.get(repo, {}))
             for repo in DEFAULT_GITHUB_TEMPLATE_REPOS
-        ]
+        ])
+
+    # Include host/local templates used by CLI/local deployment flows.
+    existing_ids = {template.get("id") for template in templates}
+    for local_template in _load_local_templates():
+        if local_template.get("id") not in existing_ids:
+            templates.append(local_template)
+            existing_ids.add(local_template.get("id"))
+
+    templates.sort(key=lambda t: (t.get("priority", 100), t.get("display_name", "")))
+    return templates
 
 
 def get_github_template(template_id: str) -> Optional[dict]:

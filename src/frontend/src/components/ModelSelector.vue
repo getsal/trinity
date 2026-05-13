@@ -82,13 +82,16 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const PRESET_MODELS = [
-  { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', note: 'Default — most capable' },
-  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', note: 'Latest generation' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', note: 'Fast + smart' },
-  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', note: 'Previous gen, fast' },
-  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', note: 'Fastest, cheapest' },
-  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4', note: 'Legacy' },
-  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', note: 'Legacy' }
+  // Gemini
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Reasoning / flagship' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Fast + cheap' },
+
+  // Claude fallback first
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', note: 'Fallback / cheapest' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', note: 'Balanced' },
+  { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', note: 'Flagship' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', note: 'Latest' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', note: 'Fast + smart' }
 ]
 
 const showDropdown = ref(false)
