@@ -161,3 +161,7 @@ tests/manual/
 # gstack tooling state (skill-local artifacts; project-tracked CSO reports
 # live under docs/security-reports/ instead)
 .gstack/
+
+# Trinity remote deployment tracking (contains internal URLs)
+.trinity-remote.yaml
+.trinity-sync.yaml
