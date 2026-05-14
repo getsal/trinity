@@ -84,8 +84,6 @@ async def register_subscription(
             name=request.name,
             token=request.token,
             owner_id=user["id"],
-            provider=request.provider,
-            token_type=request.token_type,
             subscription_type=request.subscription_type,
             rate_limit_tier=request.rate_limit_tier,
         )

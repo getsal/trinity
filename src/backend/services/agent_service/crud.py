@@ -31,7 +31,6 @@ from services.template_service import (
 )
 from services import git_service
 from services.settings_service import get_anthropic_api_key, get_github_pat, get_agent_full_capabilities, get_agent_quota_for_role, get_agent_default_resources
-from services.runtime_providers import RUNTIME_PROVIDER, PROVIDER_ENV_VARS, get_env_var_for_runtime
 from services.github_service import GitHubService, GitHubError
 from utils.helpers import sanitize_agent_name, utc_now_iso
 from .helpers import validate_base_image
@@ -441,44 +440,33 @@ async def create_agent_internal(
         env_vars['AGENT_GUARDRAILS'] = _json.dumps(_guardrails)
 
     # Auto-assign subscription (round-robin) — #74
-    # Uses generic provider mapping so Claude, OpenAI, and Google all work the same way.
     auto_assigned_subscription_id = None
-    provider = RUNTIME_PROVIDER.get(effective_runtime)
-    if provider:
+    if effective_runtime in ("claude-code", "claude"):
         try:
-            least_used = db.get_least_used_subscription(provider=provider)
+            least_used = db.get_least_used_subscription()
             if least_used:
                 token = db.get_subscription_token(least_used.id)
                 if token:
-                    env_var = get_env_var_for_runtime(effective_runtime, least_used.token_type)
-                    if env_var:
-                        env_vars[env_var] = token
-                        # If we injected a subscription token, remove the platform key for this provider
-                        for platform_key in PROVIDER_ENV_VARS.get(provider, {}).values():
-                            if platform_key != env_var:
-                                env_vars.pop(platform_key, None)
+                    env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
+                    env_vars.pop('ANTHROPIC_API_KEY', None)
                     auto_assigned_subscription_id = least_used.id
-                    logger.info(f"Auto-assigned subscription '{least_used.name}' ({provider}) to agent {config.name}")
+                    logger.info(f"Auto-assigned subscription '{least_used.name}' to agent {config.name}")
                 else:
                     logger.warning(f"Failed to decrypt subscription '{least_used.name}' token, using platform API key")
         except Exception as e:
             logger.warning(f"Subscription auto-assign failed for {config.name}: {e}")
-
-    # For non-Claude runtimes, inject the appropriate platform API key and remove ANTHROPIC_API_KEY
-    if effective_runtime not in ("claude-code", "claude"):
+    else:
         env_vars.pop('ANTHROPIC_API_KEY', None)
-        if effective_runtime in ('gemini-cli', 'gemini'):
-            google_api_key = os.getenv('GOOGLE_API_KEY', '')
-            if google_api_key:
-                env_vars.setdefault('GEMINI_API_KEY', google_api_key)
-            else:
-                logger.warning("Gemini runtime selected but GOOGLE_API_KEY not configured")
-        elif effective_runtime == 'codex':
-            openai_api_key = os.getenv('OPENAI_API_KEY', '')
-            if openai_api_key:
-                env_vars.setdefault('OPENAI_API_KEY', openai_api_key)
-            else:
-                logger.warning("Codex runtime selected but OPENAI_API_KEY not configured")
+        logger.info(f"Skipping Claude subscription auto-assign for {config.name}: runtime={effective_runtime}")
+
+    # Add Google API key if using Gemini runtime
+    # Gemini CLI expects GEMINI_API_KEY environment variable
+    if effective_runtime in ('gemini-cli', 'gemini'):
+        google_api_key = os.getenv('GOOGLE_API_KEY', '')
+        if google_api_key:
+            env_vars['GEMINI_API_KEY'] = google_api_key  # Gemini CLI expects this name
+        else:
+            logger.warning("Gemini runtime selected but GOOGLE_API_KEY not configured")
 
     # OpenTelemetry Configuration (enabled by default)
     # Claude Code has built-in OTel support - these vars enable metrics export
