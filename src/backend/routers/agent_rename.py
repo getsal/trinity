@@ -1,8 +1,9 @@
-"""Agent rename endpoint (RENAME-001)."""
+"""Agent rename and runtime-switch endpoints."""
 import re
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ from services.docker_service import get_agent_container
 from services.docker_utils import container_stop, container_rename
 from services.image_generation_prompts import AVATAR_EMOTIONS
 from services.platform_audit_service import platform_audit_service, AuditEventType
+from services.agent_service.lifecycle import switch_agent_runtime
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -206,3 +208,56 @@ async def rename_agent_endpoint(
             status_code=500,
             detail=f"Failed to rename agent: {str(e)}"
         )
+
+
+SUPPORTED_RUNTIMES = ("claude-code", "gemini-cli")
+
+
+class SwitchRuntimeRequest(BaseModel):
+    runtime: str
+    model: Optional[str] = ""
+
+
+@router.put("/{agent_name}/runtime")
+async def switch_runtime_endpoint(
+    agent_name: str,
+    body: SwitchRuntimeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Switch an existing agent's runtime without losing its workspace.
+
+    Recreates the container with AGENT_RUNTIME / AGENT_RUNTIME_MODEL updated.
+    The agent is stopped, recreated, and restarted automatically if it was running.
+
+    Supported runtimes: ``claude-code``, ``gemini-cli``
+    """
+    if body.runtime not in SUPPORTED_RUNTIMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported runtime '{body.runtime}'. Choose from: {', '.join(SUPPORTED_RUNTIMES)}",
+        )
+
+    container = get_agent_container(agent_name)
+    if not container:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    was_running = container.status == "running"
+
+    await switch_agent_runtime(
+        agent_name=agent_name,
+        runtime=body.runtime,
+        model=body.model or "",
+        owner_username=current_user.username,
+    )
+
+    logger.info(
+        f"Runtime switched for agent {agent_name} to {body.runtime} by {current_user.username}"
+    )
+
+    return {
+        "agent": agent_name,
+        "runtime": body.runtime,
+        "model": body.model or "",
+        "was_running": was_running,
+        "message": f"Runtime switched to '{body.runtime}'" + (" and agent restarted" if was_running else ""),
+    }

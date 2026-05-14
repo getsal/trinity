@@ -535,3 +535,109 @@ async def recreate_container_with_updated_config(agent_name: str, old_container,
 
     logger.info(f"Recreated container for agent {agent_name} with updated configuration")
     return new_container
+
+
+async def switch_agent_runtime(agent_name: str, runtime: str, model: str, owner_username: str):
+    """Switch an existing agent's runtime (e.g. claude-code → gemini-cli).
+
+    Recreates the container preserving the workspace volume and all other
+    mounts. The agent must be stopped first; this function handles stop +
+    recreate + start.
+
+    Supported runtimes: "claude-code", "gemini-cli"
+    """
+    container = get_agent_container(agent_name)
+    if not container:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    was_running = container.status == "running"
+
+    # Rebuild env dict from old container, then patch runtime vars
+    old_config = container.attrs.get("Config", {})
+    env_vars = {
+        e.split("=", 1)[0]: e.split("=", 1)[1]
+        for e in old_config.get("Env", [])
+        if "=" in e
+    }
+    env_vars["AGENT_RUNTIME"] = runtime
+    env_vars["AGENT_RUNTIME_MODEL"] = model
+
+    # Re-inject the correct auth env for the new runtime
+    if runtime in ("claude-code", "claude"):
+        subscription_id = db.get_agent_subscription_id(agent_name)
+        if subscription_id:
+            token = db.get_subscription_token(subscription_id)
+            if token:
+                env_vars["CLAUDE_CODE_OAUTH_TOKEN"] = token
+            env_vars.pop("ANTHROPIC_API_KEY", None)
+        else:
+            env_vars["ANTHROPIC_API_KEY"] = get_anthropic_api_key()
+            env_vars.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+    else:
+        # Non-Claude runtime: remove Claude auth, add Gemini key if available
+        env_vars.pop("ANTHROPIC_API_KEY", None)
+        env_vars.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")
+        if google_api_key:
+            env_vars["GEMINI_API_KEY"] = google_api_key
+        else:
+            logger.warning(f"Gemini runtime selected for {agent_name} but GOOGLE_API_KEY not configured")
+
+    # Update the trinity.agent-runtime label so UI reflects the change
+    labels = old_config.get("Labels", {})
+    labels["trinity.agent-runtime"] = runtime
+
+    # Stop and remove old container
+    try:
+        await container_stop(container)
+    except Exception:
+        pass
+    await container_remove(container)
+
+    # Rebuild volumes from old mounts
+    old_mounts = container.attrs.get("Mounts", [])
+    volumes = {}
+    for m in old_mounts:
+        dest = m.get("Destination", "")
+        if dest == "/home/developer/shared-out" or dest.startswith("/home/developer/shared-in/"):
+            continue
+        if dest == db.get_public_mount_path():
+            continue
+        if m.get("Type") == "bind":
+            volumes[m.get("Source")] = {"bind": dest, "mode": "rw" if m.get("RW", True) else "ro"}
+        elif m.get("Type") == "volume":
+            vol_name = m.get("Name")
+            if vol_name:
+                volumes[vol_name] = {"bind": dest, "mode": "rw" if m.get("RW", True) else "ro"}
+
+    image = old_config.get("Image", "trinity-agent-base:latest")
+    validate_base_image(image)
+
+    ssh_port = int(labels.get("trinity.ssh-port", 2222))
+    full_capabilities = get_agent_full_capabilities()
+
+    new_container = await containers_run(
+        image,
+        detach=True,
+        name=f"agent-{agent_name}",
+        ports={"22/tcp": ssh_port},
+        volumes=volumes,
+        environment=env_vars,
+        labels=labels,
+        security_opt=["apparmor:docker-default"],
+        cap_drop=["ALL"],
+        cap_add=FULL_CAPABILITIES if full_capabilities else RESTRICTED_CAPABILITIES,
+        read_only=False,
+        tmpfs={"/tmp": "noexec,nosuid,size=100m"},
+        network="trinity-agent-network",
+        mem_limit=labels.get("trinity.memory", "4g"),
+        cpu_count=int(labels.get("trinity.cpu", 2)),
+    )
+
+    if was_running:
+        await container_start(new_container)
+
+    logger.info(
+        f"Switched runtime for agent {agent_name}: runtime={runtime} model={model}"
+    )
+    return new_container

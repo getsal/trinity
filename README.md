@@ -384,6 +384,63 @@ my-template/
 # .trinity/prompt.md           # Operator communication protocol
 ```
 
+### Multi-Runtime Support (Claude / Gemini)
+
+Trinity supports two agent runtimes. The runtime is set per-agent and can be changed on existing agents without data loss.
+
+#### Setting the runtime in a template
+
+Add a `runtime` block to `template.yaml`:
+
+```yaml
+# template.yaml
+runtime:
+  type: gemini-cli          # "claude-code" (default) or "gemini-cli"
+  model: gemini-2.5-flash   # optional — model override
+```
+
+Local templates in `config/agent-templates/` are auto-discovered. Create from the UI or API:
+
+```bash
+# Via API
+curl -X POST http://localhost:8000/api/agents \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-gemini-agent", "template": "test-gemini"}'
+```
+
+#### Switching runtime on an existing agent
+
+Use `PUT /api/agents/{name}/runtime` to hot-swap the runtime. The agent's workspace volume is preserved; only the container is recreated.
+
+```bash
+# Switch to Gemini CLI
+curl -X PUT http://localhost:8000/api/agents/my-agent/runtime \
+  -H "Content-Type: application/json" \
+  -d '{"runtime": "gemini-cli", "model": "gemini-2.5-flash"}'
+
+# Switch back to Claude Code
+curl -X PUT http://localhost:8000/api/agents/my-agent/runtime \
+  -H "Content-Type: application/json" \
+  -d '{"runtime": "claude-code", "model": ""}'
+```
+
+Response:
+```json
+{
+  "agent": "my-agent",
+  "runtime": "gemini-cli",
+  "model": "gemini-2.5-flash",
+  "was_running": true,
+  "message": "Runtime switched to 'gemini-cli' and agent restarted"
+}
+```
+
+**Notes:**
+- Supported runtimes: `claude-code`, `gemini-cli`
+- If the agent was running, it is stopped, recreated, and restarted automatically
+- Gemini runtime requires `GOOGLE_API_KEY` in `.env`
+- The workspace volume (`/home/developer`) is never touched — files, memory, and git history survive the switch
+
 ### Design Guides
 
 | Guide | Use Case |
