@@ -1870,6 +1870,23 @@ def _migrate_public_links_type(cursor, conn):
     conn.commit()
 
 
+def _migrate_subscription_provider_fields(cursor, conn):
+    """Add provider and token_type columns to subscription_credentials for multi-runtime support."""
+    _safe_add_column(
+        cursor,
+        "subscription_credentials",
+        "provider",
+        "ALTER TABLE subscription_credentials ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'",
+    )
+    _safe_add_column(
+        cursor,
+        "subscription_credentials",
+        "token_type",
+        "ALTER TABLE subscription_credentials ADD COLUMN token_type TEXT NOT NULL DEFAULT 'oauth'",
+    )
+    conn.commit()
+
+
 MIGRATIONS = [
     ("agent_sharing", _migrate_agent_sharing_table),
     ("schedule_executions_observability", _migrate_schedule_executions_observability),
@@ -1926,4 +1943,5 @@ MIGRATIONS = [
     ("agent_sessions_tables", _migrate_agent_sessions_tables),
     ("session_compact_events", _migrate_session_compact_events),
     ("public_links_type", _migrate_public_links_type),
+    ("subscription_provider_fields", _migrate_subscription_provider_fields),
 ]
