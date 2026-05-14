@@ -45,8 +45,6 @@ class SubscriptionOperations:
         data = {
             "id": row_dict["id"],
             "name": row_dict["name"],
-            "provider": row_dict.get("provider", "claude"),
-            "token_type": row_dict.get("token_type", "oauth"),
             "subscription_type": row_dict.get("subscription_type"),
             "rate_limit_tier": row_dict.get("rate_limit_tier"),
             "owner_id": row_dict["owner_id"],
@@ -71,8 +69,6 @@ class SubscriptionOperations:
         name: str,
         token: str,
         owner_id: int,
-        provider: str = "claude",
-        token_type: str = "oauth",
         subscription_type: Optional[str] = None,
         rate_limit_tier: Optional[str] = None,
     ) -> SubscriptionCredential:
@@ -84,10 +80,8 @@ class SubscriptionOperations:
 
         Args:
             name: Unique name for the subscription (e.g., "eugene-max")
-            token: Long-lived OAuth token or API key
+            token: Long-lived token from `claude setup-token` (sk-ant-oat01-...)
             owner_id: User ID of the subscription owner
-            provider: Runtime provider ("claude", "openai", "google")
-            token_type: Credential type ("oauth" or "api_key")
             subscription_type: Type like "max" or "pro"
             rate_limit_tier: Rate limit tier if known
 
@@ -116,21 +110,19 @@ class SubscriptionOperations:
                 cursor.execute("""
                     UPDATE subscription_credentials
                     SET encrypted_credentials = ?,
-                        provider = ?,
-                        token_type = ?,
                         subscription_type = ?,
                         rate_limit_tier = ?,
                         updated_at = ?
                     WHERE id = ?
-                """, (encrypted, provider, token_type, subscription_type, rate_limit_tier, now, subscription_id))
+                """, (encrypted, subscription_type, rate_limit_tier, now, subscription_id))
             else:
                 # Create new subscription
                 subscription_id = str(uuid.uuid4())
                 cursor.execute("""
                     INSERT INTO subscription_credentials
-                    (id, name, encrypted_credentials, provider, token_type, subscription_type, rate_limit_tier, owner_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (subscription_id, name, encrypted, provider, token_type, subscription_type, rate_limit_tier, owner_id, now, now))
+                    (id, name, encrypted_credentials, subscription_type, rate_limit_tier, owner_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (subscription_id, name, encrypted, subscription_type, rate_limit_tier, owner_id, now, now))
 
             conn.commit()
 
@@ -547,16 +539,13 @@ class SubscriptionOperations:
             conn.commit()
             return count
 
-    def get_least_used_subscription(self, provider: str = "claude") -> Optional[SubscriptionCredential]:
+    def get_least_used_subscription(self) -> Optional[SubscriptionCredential]:
         """
         Get subscription with fewest assigned agents (round-robin).
 
         Tie-break: alphabetical by name.
         Skips subscriptions that are currently rate-limited or have invalid tokens.
         Used for auto-assignment on agent creation (#74).
-
-        Args:
-            provider: Filter by provider ("claude", "openai", "google")
 
         Returns:
             SubscriptionCredential with fewest agents, or None if no viable subscription
@@ -568,9 +557,8 @@ class SubscriptionOperations:
                     (SELECT COUNT(*) FROM agent_ownership WHERE subscription_id = s.id) as agent_count
                 FROM subscription_credentials s
                 JOIN users u ON s.owner_id = u.id
-                WHERE s.provider = ?
                 ORDER BY agent_count ASC, s.name ASC
-            """, (provider,))
+            """)
             for row in cursor.fetchall():
                 sub = self._row_to_subscription(row)
                 # Skip rate-limited subscriptions
