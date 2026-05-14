@@ -407,4 +407,3 @@ grep -q "^\.local/$" /home/developer/.gitignore || echo ".local/" >> /home/devel
 
 echo "Agent ready. Keeping container alive..."
 tail -f /dev/null
-

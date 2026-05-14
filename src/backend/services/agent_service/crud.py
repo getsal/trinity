@@ -126,6 +126,8 @@ async def create_agent_internal(
     git_working_branch = None
     # Phase 9.11: Track shared folder config from template
     template_shared_folders = None
+    template_runtime_type = None
+    template_runtime_model = None
 
     # Load template configuration
     if config.template:
@@ -245,78 +247,84 @@ async def create_agent_internal(
                     source_mode=config.source_mode,
                 )
             )
-    else:
-        # Local template - accept both plain ids and local: ids.
-        local_template = get_local_template(config.template)
-        if local_template:
-            template_data = local_template
-            template_name = local_template.get("id", config.template)
-            config.template = template_name
-            config.type = local_template.get("type", config.type)
-            config.resources = local_template.get("resources", config.resources)
-            config.tools = local_template.get("tools", config.tools)
-            config.mcp_servers = list(local_template.get("mcp_servers", [])) or config.mcp_servers
-            runtime_config = local_template.get("runtime", {})
-            if isinstance(runtime_config, dict):
-                config.runtime = runtime_config.get("type", config.runtime)
-                config.runtime_model = runtime_config.get("model", config.runtime_model)
-            elif isinstance(runtime_config, str):
-                config.runtime = runtime_config
-            shared_folders_config = local_template.get("shared_folders", {})
-            if shared_folders_config:
-                template_shared_folders = {
-                    "expose": shared_folders_config.get("expose", False),
-                    "consume": shared_folders_config.get("consume", False)
-                }
         else:
-            template_name = config.template[6:] if config.template.startswith("local:") else config.template
-            templates_dir = Path("/agent-configs/templates")
-            if not templates_dir.exists():
-                templates_dir = Path("./config/agent-templates")
-
-            template_path = templates_dir / template_name
-            template_yaml = template_path / "template.yaml"
-
-            if template_yaml.exists():
-                try:
-                    with open(template_yaml) as f:
-                        template_data = yaml.safe_load(f)
-                        config.type = template_data.get("type", config.type)
-                        config.resources = template_data.get("resources", config.resources)
-                        config.tools = template_data.get("tools", config.tools)
-                        creds = template_data.get("credentials", {})
-                        mcp_servers = list(creds.get("mcp_servers", {}).keys())
-                        if mcp_servers:
-                            config.mcp_servers = mcp_servers
-                        # Multi-runtime support - extract runtime config from template
-                        runtime_config = template_data.get("runtime", {})
-                        if isinstance(runtime_config, dict):
-                            config.runtime = runtime_config.get("type", config.runtime)
-                            config.runtime_model = runtime_config.get("model", config.runtime_model)
-                        elif isinstance(runtime_config, str):
-                            config.runtime = runtime_config
-                        # Phase 9.11: Extract shared folder config from template
-                        shared_folders_config = template_data.get("shared_folders", {})
-                        if shared_folders_config:
-                            template_shared_folders = {
-                                "expose": shared_folders_config.get("expose", False),
-                                "consume": shared_folders_config.get("consume", False)
-                            }
-                except Exception as e:
-                    logger.warning(f"Error loading template config: {e}")
+            # Local template - accept both plain ids and local: ids.
+            local_template = get_local_template(config.template)
+            if local_template:
+                template_data = local_template
+                template_name = local_template.get("id", config.template)
+                config.template = template_name
+                config.type = local_template.get("type", config.type)
+                config.resources = local_template.get("resources", config.resources)
+                config.tools = local_template.get("tools", config.tools)
+                config.mcp_servers = list(local_template.get("mcp_servers", [])) or config.mcp_servers
+                runtime_config = local_template.get("runtime", {})
+                if isinstance(runtime_config, dict):
+                    template_runtime_type = runtime_config.get("type", config.runtime)
+                    template_runtime_model = runtime_config.get("model", config.runtime_model)
+                    config.runtime = template_runtime_type
+                    config.runtime_model = template_runtime_model
+                elif isinstance(runtime_config, str):
+                    config.runtime = runtime_config
+                shared_folders_config = local_template.get("shared_folders", {})
+                if shared_folders_config:
+                    template_shared_folders = {
+                        "expose": shared_folders_config.get("expose", False),
+                        "consume": shared_folders_config.get("consume", False)
+                    }
+            else:
+                template_name = config.template[6:] if config.template.startswith("local:") else config.template
+                templates_dir = Path("/agent-configs/templates")
+                if not templates_dir.exists():
+                    templates_dir = Path("./config/agent-templates")
+    
+                template_path = templates_dir / template_name
+                template_yaml = template_path / "template.yaml"
+    
+                if template_yaml.exists():
+                    try:
+                        with open(template_yaml) as f:
+                            template_data = yaml.safe_load(f)
+                            config.type = template_data.get("type", config.type)
+                            config.resources = template_data.get("resources", config.resources)
+                            config.tools = template_data.get("tools", config.tools)
+                            creds = template_data.get("credentials", {})
+                            mcp_servers = list(creds.get("mcp_servers", {}).keys())
+                            if mcp_servers:
+                                config.mcp_servers = mcp_servers
+                            # Multi-runtime support - extract runtime config from template
+                            runtime_config = template_data.get("runtime", {})
+                            if isinstance(runtime_config, dict):
+                                template_runtime_type = runtime_config.get("type", config.runtime)
+                                template_runtime_model = runtime_config.get("model", config.runtime_model)
+                                config.runtime = template_runtime_type
+                                config.runtime_model = template_runtime_model
+                            elif isinstance(runtime_config, str):
+                                config.runtime = runtime_config
+                            # Phase 9.11: Extract shared folder config from template
+                            shared_folders_config = template_data.get("shared_folders", {})
+                            if shared_folders_config:
+                                template_shared_folders = {
+                                    "expose": shared_folders_config.get("expose", False),
+                                    "consume": shared_folders_config.get("consume", False)
+                                }
+                    except Exception as e:
+                        logger.warning(f"Error loading template config: {e}")
 
     if config.port is None:
         config.port = get_next_available_port()
 
     # Multi-runtime fallback: if a Gemini model was selected but runtime was not
     # explicitly propagated from the UI/template, run the agent with Gemini CLI.
-    effective_runtime = config.runtime or "claude-code"
-    effective_runtime_model = config.runtime_model or ""
+    effective_runtime = template_runtime_type or config.runtime or "claude-code"
+    effective_runtime_model = template_runtime_model or config.runtime_model or ""
     if effective_runtime == "claude-code" and effective_runtime_model.startswith("gemini-"):
         effective_runtime = "gemini-cli"
         logger.info(
             f"Inferred Gemini runtime for {config.name} from runtime_model={effective_runtime_model}"
         )
+    config.runtime = effective_runtime
+    config.runtime_model = effective_runtime_model
 
     # CRED-002: Credentials are now injected directly into agents after creation
     # via the inject_credentials endpoint, not auto-injected during creation.
@@ -385,6 +393,14 @@ async def create_agent_internal(
 
     # Phase: Agent-to-Agent Collaboration
     # Generate agent-scoped MCP API key for Trinity MCP access
+    if template_data:
+        runtime_from_template = template_data.get("runtime", {})
+        if isinstance(runtime_from_template, dict):
+            effective_runtime = runtime_from_template.get("type", effective_runtime)
+            effective_runtime_model = runtime_from_template.get("model", effective_runtime_model)
+            config.runtime = effective_runtime
+            config.runtime_model = effective_runtime_model
+
     agent_mcp_key = None
     trinity_mcp_url = os.getenv('TRINITY_MCP_URL', 'http://mcp-server:8080/mcp')
     try:
@@ -411,6 +427,11 @@ async def create_agent_internal(
         'AGENT_RUNTIME': effective_runtime,
         'AGENT_RUNTIME_MODEL': effective_runtime_model
     }
+    if template_data:
+        runtime_from_template = template_data.get('runtime', {})
+        if isinstance(runtime_from_template, dict):
+            env_vars['AGENT_RUNTIME'] = runtime_from_template.get('type', env_vars['AGENT_RUNTIME'])
+            env_vars['AGENT_RUNTIME_MODEL'] = runtime_from_template.get('model', env_vars['AGENT_RUNTIME_MODEL'])
 
     # GUARD-001: per-agent guardrails overrides (empty by default; baseline
     # is always applied inside the container).

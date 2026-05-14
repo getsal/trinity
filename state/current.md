@@ -1,24 +1,26 @@
 # Current State
 
 ## Active Task
-Fix the backend migration import error in `src/backend/db/migrations.py`.
+Finish Gemini runtime propagation so local templates create agents with `AGENT_RUNTIME=gemini-cli`.
 
 ## Current Status
-Moved `_migrate_subscription_provider_fields` above `MIGRATIONS` in `src/backend/db/migrations.py` so the import-time `NameError` is resolved in code.
-Confirmed `.env.example` already includes `REDIS_BACKEND_PASSWORD`.
-Confirmed a real `.env` is now present in the worktree.
-Verified `backend` restarted successfully and `/health` now returns `{"status":"healthy", ...}`.
+Local template loading and Gemini runtime propagation are patched in code. `/api/templates` returns the local Gemini template, and `docker/base-image/startup.sh` now has a single simplified runtime export block that reads `/template/template.yaml` and exports `AGENT_RUNTIME` / `AGENT_RUNTIME_MODEL`.
+The remaining blocker is re-running the rebuilt image path on the remote host and rechecking a fresh agent container, because the previous container still booted with `claude-code`.
 
 ## Next Action
-None.
+Sync the cleaned startup script to the remote host, rebuild the base image if needed, restart backend, and recreate `test-gemini` to verify the Gemini env values.
 
 ## Blockers
-None.
+Remote verification still needed; prior container already proved the old image path kept `claude-code`.
 
 ## Relevant Files
-- src/backend/db/migrations.py
+- src/backend/services/template_service.py
+- src/backend/routers/templates.py
+- src/backend/services/agent_service/crud.py
+- docker/base-image/startup.sh
+- config/agent-templates/test-gemini/template.yaml
 - state/current.md
 - logs/worklog.md
 
 ## Handover Note
-Migration import fix verified end-to-end. Keep the scope narrow if any follow-up work appears.
+Remote SSH is working. Continue from the in-flight build and finish the runtime verification.

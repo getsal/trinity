@@ -553,10 +553,13 @@ async def recreate_container_with_updated_config(agent_name: str, old_container,
 
 
 async def switch_agent_runtime(agent_name: str, runtime: str, model: str, owner_username: str):
-    """Switch an existing agent's runtime (e.g. claude-code → gemini-cli → codex).
+    """Switch an existing agent's runtime (e.g. claude-code → gemini-cli).
 
-    Recreates the container preserving the workspace volume and all other mounts.
-    Handles stop + recreate + restart automatically.
+    Recreates the container preserving the workspace volume and all other
+    mounts. The agent must be stopped first; this function handles stop +
+    recreate + start.
+
+    Supported runtimes: "claude-code", "gemini-cli"
     """
     container = get_agent_container(agent_name)
     if not container:
@@ -574,37 +577,26 @@ async def switch_agent_runtime(agent_name: str, runtime: str, model: str, owner_
     env_vars["AGENT_RUNTIME"] = runtime
     env_vars["AGENT_RUNTIME_MODEL"] = model
 
-    # Clear all provider-specific env vars, then inject the right one for the new runtime
-    for p_vars in PROVIDER_ENV_VARS.values():
-        for ev in p_vars.values():
-            env_vars.pop(ev, None)
-
-    subscription_id = db.get_agent_subscription_id(agent_name)
-    if subscription_id:
-        sub = db.get_subscription(subscription_id)
-        token = db.get_subscription_token(subscription_id)
-        if token and sub and RUNTIME_PROVIDER.get(runtime) == sub.provider:
-            env_var = get_env_var_for_runtime(runtime, sub.token_type)
-            if env_var:
-                env_vars[env_var] = token
+    # Re-inject the correct auth env for the new runtime
+    if runtime in ("claude-code", "claude"):
+        subscription_id = db.get_agent_subscription_id(agent_name)
+        if subscription_id:
+            token = db.get_subscription_token(subscription_id)
+            if token:
+                env_vars["CLAUDE_CODE_OAUTH_TOKEN"] = token
+            env_vars.pop("ANTHROPIC_API_KEY", None)
+        else:
+            env_vars["ANTHROPIC_API_KEY"] = get_anthropic_api_key()
+            env_vars.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
     else:
-        # Fall back to platform API key for the target runtime
-        if runtime in ("claude-code", "claude"):
-            key = get_anthropic_api_key()
-            if key:
-                env_vars["ANTHROPIC_API_KEY"] = key
-        elif runtime in ("gemini-cli", "gemini"):
-            key = os.getenv("GOOGLE_API_KEY", "")
-            if key:
-                env_vars["GEMINI_API_KEY"] = key
-            else:
-                logger.warning(f"Gemini runtime for {agent_name} but GOOGLE_API_KEY not configured")
-        elif runtime == "codex":
-            key = os.getenv("OPENAI_API_KEY", "")
-            if key:
-                env_vars["OPENAI_API_KEY"] = key
-            else:
-                logger.warning(f"Codex runtime for {agent_name} but OPENAI_API_KEY not configured")
+        # Non-Claude runtime: remove Claude auth, add Gemini key if available
+        env_vars.pop("ANTHROPIC_API_KEY", None)
+        env_vars.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")
+        if google_api_key:
+            env_vars["GEMINI_API_KEY"] = google_api_key
+        else:
+            logger.warning(f"Gemini runtime selected for {agent_name} but GOOGLE_API_KEY not configured")
 
     # Update the trinity.agent-runtime label so UI reflects the change
     labels = old_config.get("Labels", {})
@@ -660,4 +652,7 @@ async def switch_agent_runtime(agent_name: str, runtime: str, model: str, owner_
     if was_running:
         await container_start(new_container)
 
-    logger.info(f"Switched runtime for agent {agent_name}: runtime={runtime} model={model}")
+    logger.info(
+        f"Switched runtime for agent {agent_name}: runtime={runtime} model={model}"
+    )
+    return new_container
