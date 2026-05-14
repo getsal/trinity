@@ -24,6 +24,7 @@ from services.docker_utils import (
 )
 from services.agent_service.helpers import validate_base_image
 from services.settings_service import get_anthropic_api_key, get_github_pat, get_agent_full_capabilities, get_agent_default_resources
+from services.runtime_providers import RUNTIME_PROVIDER, PROVIDER_ENV_VARS, get_env_var_for_runtime
 from services.skill_service import skill_service
 from .helpers import check_shared_folder_mounts_match, check_api_key_env_matches, check_github_pat_env_matches, check_resource_limits_match, check_full_capabilities_match, check_guardrails_env_matches
 from .file_sharing import check_public_folder_mount_matches
@@ -343,27 +344,41 @@ async def recreate_container_with_updated_config(agent_name: str, old_container,
     labels = old_config.get("Labels", {})
 
     # Update auth env vars based on current setting (SUB-002).
-    # Claude Code prioritizes ANTHROPIC_API_KEY over CLAUDE_CODE_OAUTH_TOKEN,
-    # so when a subscription is assigned we must remove the API key and set
-    # the token env var instead.
+    # Uses generic provider mapping — works for Claude, OpenAI, and Google subscriptions.
+    effective_runtime = env_vars.get('AGENT_RUNTIME', 'claude-code')
+    provider = RUNTIME_PROVIDER.get(effective_runtime, 'claude')
     subscription_id = db.get_agent_subscription_id(agent_name)
     has_subscription = subscription_id is not None
     use_platform_key = db.get_use_platform_api_key(agent_name)
 
+    # Clear all known provider env vars first to avoid stale values
+    for p_vars in PROVIDER_ENV_VARS.values():
+        for ev in p_vars.values():
+            env_vars.pop(ev, None)
+
     if has_subscription:
-        # Subscription assigned — inject token, remove API key
+        # Subscription assigned — inject token via the correct env var for this provider
+        sub = db.get_subscription(subscription_id)
         token = db.get_subscription_token(subscription_id)
-        if token:
-            env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
-        env_vars.pop('ANTHROPIC_API_KEY', None)
+        if token and sub:
+            env_var = get_env_var_for_runtime(effective_runtime, sub.token_type)
+            if env_var:
+                env_vars[env_var] = token
     elif use_platform_key:
-        # No subscription, use platform API key
-        env_vars['ANTHROPIC_API_KEY'] = get_anthropic_api_key()
-        env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
-    else:
-        # No subscription, no platform key — user will auth in terminal
-        env_vars.pop('ANTHROPIC_API_KEY', None)
-        env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
+        # No subscription — inject platform API key for the current runtime
+        if effective_runtime in ('claude-code', 'claude'):
+            key = get_anthropic_api_key()
+            if key:
+                env_vars['ANTHROPIC_API_KEY'] = key
+        elif effective_runtime in ('gemini-cli', 'gemini'):
+            key = os.getenv('GOOGLE_API_KEY', '')
+            if key:
+                env_vars['GEMINI_API_KEY'] = key
+        elif effective_runtime == 'codex':
+            key = os.getenv('OPENAI_API_KEY', '')
+            if key:
+                env_vars['OPENAI_API_KEY'] = key
+    # else: no credentials — user authenticates interactively inside container
 
     # Update GITHUB_PAT if the container has one and a current system PAT exists
     if env_vars.get('GITHUB_PAT'):

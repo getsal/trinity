@@ -722,24 +722,37 @@ class NotificationAcknowledge(BaseModel):
 # =========================================================================
 
 class SubscriptionCredentialCreate(BaseModel):
-    """Request model for registering a subscription token from `claude setup-token`."""
+    """Request model for registering a subscription credential (OAuth token or API key)."""
     name: str  # Unique name for the subscription (e.g., "eugene-max")
-    token: str  # Long-lived token from `claude setup-token` (sk-ant-oat01-...)
+    token: str  # Long-lived OAuth token or API key
+    provider: str = "claude"  # "claude", "openai", "google"
+    token_type: str = "oauth"  # "oauth" or "api_key"
     subscription_type: Optional[str] = None  # "max", "pro", etc.
     rate_limit_tier: Optional[str] = None  # Rate limit tier if known
 
-    @field_validator('token')
+    @field_validator('provider')
     @classmethod
-    def validate_token_prefix(cls, v: str) -> str:
-        if not v.startswith('sk-ant-oat01-'):
-            raise ValueError("Token must start with 'sk-ant-oat01-' (from `claude setup-token`)")
+    def validate_provider(cls, v: str) -> str:
+        allowed = {"claude", "openai", "google"}
+        if v not in allowed:
+            raise ValueError(f"provider must be one of: {', '.join(sorted(allowed))}")
+        return v
+
+    @field_validator('token_type')
+    @classmethod
+    def validate_token_type(cls, v: str) -> str:
+        allowed = {"oauth", "api_key"}
+        if v not in allowed:
+            raise ValueError(f"token_type must be one of: {', '.join(sorted(allowed))}")
         return v
 
 
 class SubscriptionCredential(BaseModel):
-    """A registered Claude subscription credential."""
+    """A registered subscription credential."""
     id: str
     name: str
+    provider: str = "claude"
+    token_type: str = "oauth"
     subscription_type: Optional[str] = None
     rate_limit_tier: Optional[str] = None
     owner_id: int

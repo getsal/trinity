@@ -87,51 +87,42 @@
 - Next action: Stage and commit the intended files with an English commit message.
 - Blockers: Unrelated AppleDouble metadata and deleted test-utils files remain in the tree.
 
-
 ## 2026-05-14T01:05:00Z
 
-- Task: Commit the backend template-loading fix.
-- Result: Created commit `7d797901` with the intended backend/template changes and `logs/worklog.md`.
-- Files changed: config/agent-templates/test-gemini/template.yaml, src/backend/services/agent_service/crud.py, state/current.md, logs/worklog.md
-- Next action: Retry `test-gemini` creation and verify Gemini env propagation.
-- Blockers: Unrelated AppleDouble files and deleted `tests/utils/*` files remain uncommitted.
+- Task: Fix backend migration import error.
+- Result: Confirmed `_migrate_subscription_provider_fields` is defined after `MIGRATIONS`, causing startup `NameError` during module import.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: Move the function definition above `MIGRATIONS`, then restart backend services and verify `/health`.
+- Blockers: Need Docker verification after the code edit.
 
 ## 2026-05-14T01:10:00Z
 
-- Task: Identify which Codex hook stopped the commit.
-- Result: Confirmed the repo uses `.Codex/hooks/git-sync.sh` for Stop-hook autosync and `.Codex/hooks/git-pre-compact.sh` for snapshot commits; no `core.hooksPath` or `.Codex/settings.json` file was present in this repo path.
-- Files changed: state/current.md, logs/worklog.md
-- Next action: Explain hook roles and stop conditions to the user.
-- Blockers: None for the explanation.
-
-## 2026-05-14T01:15:00Z
-
-- Task: Continue runtime propagation fix for local Gemini agents.
-- Result: Determined backend container env still boots as `claude-code`; likely needs explicit runtime export during agent startup from `/template/template.yaml`.
-- Files changed: state/current.md, logs/worklog.md
-- Next action: Patch `docker/base-image/startup.sh` to export `AGENT_RUNTIME` and `AGENT_RUNTIME_MODEL` from local template metadata.
-- Blockers: Local agent env still not honoring Gemini template runtime.
+- Task: Verify backend restart after migration import fix.
+- Result: `src/backend/db/migrations.py` was patched successfully, but `docker compose restart trinity-backend trinity-mcp-server` failed before restart because `REDIS_BACKEND_PASSWORD` is missing from `.env`.
+- Files changed: src/backend/db/migrations.py, state/current.md, logs/worklog.md
+- Next action: Add `REDIS_BACKEND_PASSWORD` to `.env`, then rerun the restart and `/health` check.
+- Blockers: Docker Compose cannot interpolate the missing environment variable.
 
 ## 2026-05-14T01:20:00Z
 
-- Task: Rebuild the base image after adding runtime export logic.
-- Result: `docker/base-image/startup.sh` patched and shell syntax checked, but remote `./scripts/deploy/build-base-image.sh` failed because Docker could not resolve `ubuntu:22.04` metadata due a credential-helper GPG decryption error.
-- Files changed: docker/base-image/startup.sh, state/current.md, logs/worklog.md
-- Next action: Fix the remote Docker credential helper / registry auth issue, then rebuild and retest a Gemini agent.
-- Blockers: Remote Docker build blocked before image rebuild.
+- Task: Check `.env.example` and runtime env availability.
+- Result: Confirmed `REDIS_BACKEND_PASSWORD` already exists in `.env.example`; local worktree has no real `.env`.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: Copy the real runtime `.env` into this worktree without committing it, then rerun Docker verification.
+- Blockers: No accessible `.env` value in the current worktree.
+
+## 2026-05-14T01:30:00Z
+
+- Task: Retry backend restart and health verification.
+- Result: Real `.env` is present, but `docker compose restart trinity-backend trinity-mcp-server` failed because the Docker daemon at `unix:///Users/suzuki/.docker/run/docker.sock` is unreachable.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: Restore Docker daemon access, then rerun the restart and `/health` check.
+- Blockers: Docker daemon unavailable.
 
 ## 2026-05-14T01:40:00Z
 
-- Task: Continue the remote rebuild and runtime verification.
-- Result: Confirmed the remote repo path is `/home/ninkyo/repos/trinity`, verified the build is still in progress under `./scripts/deploy/build-base-image.sh`, and re-read `docker/base-image/startup.sh` plus `src/backend/services/agent_service/crud.py` to confirm the runtime export and env propagation paths are in place.
+- Task: Re-run backend verification after Docker became available.
+- Result: `docker compose restart backend mcp-server` succeeded; `backend` came up cleanly; `docker exec trinity-mcp-server sh -lc 'wget -qO- http://trinity-backend:8000/health || true'` returned `{"status":"healthy","timestamp":"2026-05-14T12:30:20.873582"}`.
 - Files changed: state/current.md, logs/worklog.md
-- Next action: Wait for the base-image build to finish, restart backend, and recreate `test-gemini` to verify `AGENT_RUNTIME=gemini-cli` and `AGENT_RUNTIME_MODEL=gemini-2.5-flash`.
-- Blockers: Remote base-image build still running.
-
-## 2026-05-14T01:55:00Z
-
-- Task: Simplify the runtime export path and remove duplicate startup logic.
-- Result: Replaced the duplicated `startup.sh` runtime export blocks with a single `eval "$(python3 ...)"` block, then verified `bash -n` and `git diff --check` passed.
-- Files changed: docker/base-image/startup.sh, state/current.md, logs/worklog.md
-- Next action: Sync the startup script cleanup to the remote host and retry the fresh `test-gemini` container verification.
-- Blockers: Remote verification still needed; existing container was built from the old image path.
+- Next action: None.
+- Blockers: None.

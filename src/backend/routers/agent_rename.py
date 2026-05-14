@@ -210,7 +210,7 @@ async def rename_agent_endpoint(
         )
 
 
-SUPPORTED_RUNTIMES = ("claude-code", "gemini-cli")
+SUPPORTED_RUNTIMES = ("claude-code", "gemini-cli", "codex")
 
 
 class SwitchRuntimeRequest(BaseModel):
@@ -229,7 +229,7 @@ async def switch_runtime_endpoint(
     Recreates the container with AGENT_RUNTIME / AGENT_RUNTIME_MODEL updated.
     The agent is stopped, recreated, and restarted automatically if it was running.
 
-    Supported runtimes: ``claude-code``, ``gemini-cli``
+    Supported runtimes: ``claude-code``, ``gemini-cli``, ``codex``
     """
     if body.runtime not in SUPPORTED_RUNTIMES:
         raise HTTPException(
