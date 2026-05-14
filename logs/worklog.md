@@ -86,3 +86,43 @@
 - Files changed: state/current.md, logs/worklog.md
 - Next action: Stage and commit the intended files with an English commit message.
 - Blockers: Unrelated AppleDouble metadata and deleted test-utils files remain in the tree.
+
+## 2026-05-14T01:05:00Z
+
+- Task: Fix backend migration import error.
+- Result: Confirmed `_migrate_subscription_provider_fields` is defined after `MIGRATIONS`, causing startup `NameError` during module import.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: Move the function definition above `MIGRATIONS`, then restart backend services and verify `/health`.
+- Blockers: Need Docker verification after the code edit.
+
+## 2026-05-14T01:10:00Z
+
+- Task: Verify backend restart after migration import fix.
+- Result: `src/backend/db/migrations.py` was patched successfully, but `docker compose restart trinity-backend trinity-mcp-server` failed before restart because `REDIS_BACKEND_PASSWORD` is missing from `.env`.
+- Files changed: src/backend/db/migrations.py, state/current.md, logs/worklog.md
+- Next action: Add `REDIS_BACKEND_PASSWORD` to `.env`, then rerun the restart and `/health` check.
+- Blockers: Docker Compose cannot interpolate the missing environment variable.
+
+## 2026-05-14T01:20:00Z
+
+- Task: Check `.env.example` and runtime env availability.
+- Result: Confirmed `REDIS_BACKEND_PASSWORD` already exists in `.env.example`; local worktree has no real `.env`.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: Copy the real runtime `.env` into this worktree without committing it, then rerun Docker verification.
+- Blockers: No accessible `.env` value in the current worktree.
+
+## 2026-05-14T01:30:00Z
+
+- Task: Retry backend restart and health verification.
+- Result: Real `.env` is present, but `docker compose restart trinity-backend trinity-mcp-server` failed because the Docker daemon at `unix:///Users/suzuki/.docker/run/docker.sock` is unreachable.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: Restore Docker daemon access, then rerun the restart and `/health` check.
+- Blockers: Docker daemon unavailable.
+
+## 2026-05-14T01:40:00Z
+
+- Task: Re-run backend verification after Docker became available.
+- Result: `docker compose restart backend mcp-server` succeeded; `backend` came up cleanly; `docker exec trinity-mcp-server sh -lc 'wget -qO- http://trinity-backend:8000/health || true'` returned `{"status":"healthy","timestamp":"2026-05-14T12:30:20.873582"}`.
+- Files changed: state/current.md, logs/worklog.md
+- Next action: None.
+- Blockers: None.
