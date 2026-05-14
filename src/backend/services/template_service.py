@@ -226,6 +226,18 @@ def _load_local_templates() -> List[dict]:
     return local_templates
 
 
+def get_local_template(template_id: str) -> Optional[dict]:
+    """Get a single local template by plain id or local: prefixed id."""
+    template_name = template_id[len("local:"):] if template_id.startswith("local:") else template_id
+    if not template_name:
+        return None
+
+    for template in _load_local_templates():
+        if template.get("id") == template_name:
+            return template
+    return None
+
+
 # ============================================================================
 # Public API
 # ============================================================================

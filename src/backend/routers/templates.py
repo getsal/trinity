@@ -8,6 +8,7 @@ from dependencies import get_current_user
 from services.template_service import (
     get_all_templates,
     get_github_template,
+    get_local_template,
 )
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
@@ -32,5 +33,9 @@ async def get_template(template_id: str, current_user: User = Depends(get_curren
         gh_template = get_github_template(template_id)
         if gh_template:
             return gh_template
+
+    local = get_local_template(template_id)
+    if local:
+        return local
 
     raise HTTPException(status_code=404, detail="Template not found")

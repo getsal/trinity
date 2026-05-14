@@ -229,6 +229,29 @@ elif [ -n "${TEMPLATE_NAME}" ] && [ -d "/template" ]; then
     fi
 fi
 
+# Local templates can carry their own runtime settings. Export them early so
+# agent-server and MCP helpers see the same runtime as the template metadata.
+if [ -f "/template/template.yaml" ]; then
+    eval "$(python3 - <<'PY'
+from pathlib import Path
+import yaml
+
+template_path = Path("/template/template.yaml")
+data = yaml.safe_load(template_path.read_text()) or {}
+runtime = data.get("runtime", {})
+if isinstance(runtime, dict):
+    runtime_type = runtime.get("type", "")
+    runtime_model = runtime.get("model", "")
+    if runtime_type:
+        print(f'export AGENT_RUNTIME="{runtime_type}"')
+    if runtime_model:
+        print(f'export AGENT_RUNTIME_MODEL="{runtime_model}"')
+else:
+    print("")
+PY
+)"
+fi
+
 # NOTE: Trinity platform instructions are injected at runtime via --append-system-prompt
 # on every Claude Code invocation (Issue #136). No file-based injection needed.
 
@@ -384,4 +407,3 @@ grep -q "^\.local/$" /home/developer/.gitignore || echo ".local/" >> /home/devel
 
 echo "Agent ready. Keeping container alive..."
 tail -f /dev/null
-
