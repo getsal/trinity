@@ -46,9 +46,14 @@ RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /
 
 RUN npm install -g @anthropic-ai/claude-code@latest
 
-# Install Gemini CLI and Codex CLI for multi-runtime support
-RUN npm install -g @google/gemini-cli && \
-    npm install -g @openai/codex
+# Install and verify Gemini CLI and Codex CLI for multi-runtime support.
+# Build must fail here if the Gemini binary is not available to future agents.
+RUN npm install -g @google/gemini-cli@latest @openai/codex@latest && \
+    command -v gemini && \
+    gemini --version && \
+    command -v codex && \
+    codex --version && \
+    npm cache clean --force
 
 RUN useradd -m -s /bin/bash -u 1000 developer && \
     echo "developer:developer" | chpasswd && \
