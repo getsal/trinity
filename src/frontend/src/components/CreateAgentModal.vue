@@ -57,12 +57,13 @@
                   v-model="form.runtime"
                   class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm px-3 py-2 focus:ring-action-primary-500 focus:border-action-primary-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 >
+                  <option disabled value="">Choose a runtime…</option>
                   <option value="claude-code">Claude Code</option>
                   <option value="codex">OpenAI Codex</option>
                   <option value="gemini-cli">Gemini CLI</option>
                 </select>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Trinity uses only a configured credential compatible with this runtime. Other provider credentials are not required.
+                  Required. Trinity uses only a credential compatible with this runtime; other provider credentials are not required.
                 </p>
               </div>
 
@@ -130,8 +131,8 @@
                       </svg>
                     </div>
                     <div class="ml-3 flex-1">
-                      <p class="text-sm font-medium text-gray-900 dark:text-white">Blank Agent (Claude Code)</p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">Start with empty config using Claude Code runtime</p>
+                      <p class="text-sm font-medium text-gray-900 dark:text-white">Blank Agent</p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">Start with an empty configuration for the runtime selected above</p>
                     </div>
                     <div v-if="form.template === ''" class="flex-shrink-0 text-action-primary-500 dark:text-action-primary-400">
                       <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -374,7 +375,7 @@ const form = reactive({
   name: '',
   display_label: '',   // ent#1640: optional human-facing display name
   template: props.initialTemplate || '',
-  runtime: 'claude-code'
+  runtime: ''
 })
 
 const githubRepoUrl = ref('')
@@ -504,8 +505,14 @@ const fetchTemplates = async () => {
 }
 
 const createAgent = async () => {
-  loading.value = true
   error.value = ''
+
+  if (!form.runtime) {
+    error.value = 'Choose a runtime before creating the agent.'
+    return
+  }
+
+  loading.value = true
 
   try {
     // Only send name and template - backend handles everything else
