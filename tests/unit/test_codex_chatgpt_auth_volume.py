@@ -14,6 +14,18 @@ def test_auth_volume_and_login_container_names_are_credential_scoped():
     assert codex_auth_service.login_container_name(subscription_id).endswith(subscription_id)
 
 
+def test_login_output_extracts_only_device_code_and_clean_url():
+    output = (
+        b"\x1b[32mOpen https://auth.openai.com/codex/device\x1b[0m\n"
+        b"Device code: A1B2C3D4E5F6\n"
+    )
+
+    clean = codex_auth_service._ANSI_ESCAPE_RE.sub("", output.decode())
+
+    assert codex_auth_service._URL_RE.findall(clean) == ["https://auth.openai.com/codex/device"]
+    assert codex_auth_service._DEVICE_CODE_RE.findall(clean) == ["A1B2C3D4E5F6"]
+
+
 @pytest.mark.asyncio
 async def test_account_login_mount_sets_private_codex_home(monkeypatch):
     credential = SimpleNamespace(provider="openai", auth_type="codex_chatgpt_login")

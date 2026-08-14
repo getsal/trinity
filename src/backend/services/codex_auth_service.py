@@ -34,6 +34,10 @@ CODEX_HOME = "/home/developer/.codex"
 _LOGIN_CONTAINER_PREFIX = "trinity-codex-login-"
 _AUTH_VOLUME_PREFIX = "trinity-codex-auth-"
 _URL_RE = re.compile(r"https://[^\s'\"]+")
+_ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+_DEVICE_CODE_RE = re.compile(
+    r"(?i:(?:one[- ]time|device)(?:[- ]authorization)?\s+code|code)\s*(?:is)?\s*[:=]?\s*([A-Z0-9]{8,})"
+)
 
 
 def auth_volume_name(subscription_id: str) -> str:
@@ -121,7 +125,9 @@ async def login_status(subscription_id: str) -> dict[str, Any]:
         return {"status": "not_started", "connected": False}
     await container_reload(container)
     raw = await container_logs(container, tail=40)
-    urls = _URL_RE.findall(raw.decode("utf-8", errors="replace"))
+    output = _ANSI_ESCAPE_RE.sub("", raw.decode("utf-8", errors="replace"))
+    urls = _URL_RE.findall(output)
+    device_codes = _DEVICE_CODE_RE.findall(output)
     state = container.attrs.get("State", {})
     running = state.get("Running", False)
     succeeded = not running and state.get("ExitCode") == 0
@@ -139,7 +145,8 @@ async def login_status(subscription_id: str) -> dict[str, Any]:
         "status": "pending" if running else ("connected" if succeeded else "failed"),
         "connected": succeeded,
         "login_url": urls[-1] if urls else None,
-        "instructions": "Open the official Codex login URL and complete the account authorization, then refresh this status.",
+        "device_code": device_codes[-1] if device_codes else None,
+        "instructions": "Open the official Codex login URL, enter the one-time device code when shown, and complete the account authorization. The resulting credential cache is never returned.",
     }
 
 

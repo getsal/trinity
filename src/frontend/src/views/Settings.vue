@@ -1262,7 +1262,10 @@
 
                   <div v-else class="mt-4 text-xs text-gray-500 dark:text-gray-400">
                     Trinity opens the official Codex device-login flow in a dedicated credential store. No API key, password, or browser cookie is requested.
-                    <a v-if="codexLoginUrl" :href="codexLoginUrl" target="_blank" rel="noopener" class="ml-1 text-action-primary-600 hover:underline">Open official login</a>
+                    <template v-if="codexLoginUrl">
+                      <a :href="codexLoginUrl" target="_blank" rel="noopener" class="ml-1 text-action-primary-600 hover:underline">Open official login</a>
+                      <span v-if="codexDeviceCode" class="ml-1">Enter code: <code class="font-mono font-semibold">{{ codexDeviceCode }}</code></span>
+                    </template>
                     <span v-else-if="codexLoginStatus" class="ml-1">{{ codexLoginStatus }}</span>
                   </div>
 
@@ -2926,6 +2929,7 @@ const deletingSubscription = ref(null)
 const expandedSubscriptions = ref(new Set())
 const encryptionConfigured = ref(true)
 const codexLoginUrl = ref('')
+const codexDeviceCode = ref('')
 const codexLoginStatus = ref('')
 const newSubscription = ref({
   name: '',
@@ -2971,6 +2975,7 @@ const credentialValueHelp = computed(() => {
 watch(() => newSubscription.value.provider, (provider) => {
   newSubscription.value.auth_type = provider === 'anthropic' ? 'claude_oauth' : 'api_key'
   codexLoginUrl.value = ''
+  codexDeviceCode.value = ''
   codexLoginStatus.value = ''
 })
 
@@ -4119,6 +4124,7 @@ async function startCodexChatGPTLogin() {
   addingSubscription.value = true
   error.value = null
   codexLoginUrl.value = ''
+  codexDeviceCode.value = ''
   codexLoginStatus.value = 'Starting official Codex login…'
   try {
     const created = await axios.post('/api/subscriptions/codex-chatgpt-login', {
@@ -4128,6 +4134,7 @@ async function startCodexChatGPTLogin() {
       headers: authStore.authHeader
     })
     codexLoginUrl.value = status.data.login_url || ''
+    codexDeviceCode.value = status.data.device_code || ''
     codexLoginStatus.value = status.data.connected ? 'Connected' : (status.data.status || 'Pending')
     await loadSubscriptions()
   } catch (e) {
