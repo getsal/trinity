@@ -6,6 +6,7 @@ services:
   backend:
     container_name: trinity-acceptance-backend
     ports: !reset ["127.0.0.1:18000:8000"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]
     environment:
       DOCKER_HOST: unix:///run/docker-trinity.sock
       TRINITY_AGENT_NETWORK: trinity-acceptance-agent-network
