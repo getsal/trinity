@@ -125,6 +125,24 @@ async def start_codex_chatgpt_login(
     user = db.get_user_by_username(current_user.username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    existing = db.get_subscription_by_name(request.name)
+    from services.codex_auth_service import login_status, start_login
+    if existing:
+        if existing.provider != "openai" or existing.auth_type != "codex_chatgpt_login":
+            raise HTTPException(
+                status_code=409,
+                detail="A credential with this name already exists. Choose a different name.",
+            )
+        # A second click must resume the existing device flow, never create a
+        # second official authorization request that can trigger rate limits.
+        login = await login_status(existing.id)
+        return {
+            "id": existing.id,
+            "name": existing.name,
+            "provider": existing.provider,
+            "auth_type": existing.auth_type,
+            **login,
+        }
     credential = db.create_subscription(
         name=request.name,
         # A non-secret marker preserves the existing encrypted-credential table
@@ -136,7 +154,6 @@ async def start_codex_chatgpt_login(
         subscription_type=request.subscription_type,
         rate_limit_tier=request.rate_limit_tier,
     )
-    from services.codex_auth_service import start_login
     login = await start_login(credential.id)
     logger.info("Started official Codex login for credential %s", credential.name)
     # Return only non-secret device-flow metadata.  The Settings UI needs this
@@ -277,12 +294,15 @@ async def delete_subscription(
     # Get agents that will be affected
     affected_agents = db.get_agents_by_subscription(subscription.id)
 
+    if subscription.provider == "openai" and subscription.auth_type == "codex_chatgpt_login":
+        # Do this before deleting the DB row: a cleanup failure must not leave
+        # an unreachable credential-local volume behind.
+        from services.codex_auth_service import delete_auth_volume
+        await delete_auth_volume(subscription.id)
+
     deleted = db.delete_subscription(subscription.id)
 
     if deleted:
-        if subscription.provider == "openai" and subscription.auth_type == "codex_chatgpt_login":
-            from services.codex_auth_service import delete_auth_volume
-            await delete_auth_volume(subscription.id)
         logger.info(
             f"Deleted subscription '{subscription.name}' by {current_user.username}, "
             f"cleared {len(affected_agents)} agent assignments"

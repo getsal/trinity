@@ -38,6 +38,7 @@ _ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 _DEVICE_CODE_RE = re.compile(
     r"(?i:(?:one[- ]time|device)(?:[- ]authorization)?\s+code|code)\s*(?:is)?\s*[:=]?\s*([A-Z0-9]{8,})"
 )
+_RATE_LIMIT_RE = re.compile(r"(?:\b429\b|too many requests|rate limit(?:ed)?)", re.IGNORECASE)
 
 
 def auth_volume_name(subscription_id: str) -> str:
@@ -131,6 +132,7 @@ async def login_status(subscription_id: str) -> dict[str, Any]:
     state = container.attrs.get("State", {})
     running = state.get("Running", False)
     succeeded = not running and state.get("ExitCode") == 0
+    rate_limited = not running and bool(_RATE_LIMIT_RE.search(output))
     if succeeded:
         # Defense in depth around the official CLI's own private-file mode.
         await containers_run(
@@ -141,11 +143,24 @@ async def login_status(subscription_id: str) -> dict[str, Any]:
             remove=True,
             network_disabled=True,
         )
+    if running:
+        status = "pending"
+        message = "Waiting for the device code from the official Codex CLI."
+    elif succeeded:
+        status = "connected"
+        message = "Connected"
+    elif rate_limited:
+        status = "rate_limited"
+        message = "OpenAI temporarily rate-limited device-login attempts. Wait before deleting this credential and starting a new login."
+    else:
+        status = "failed"
+        message = "The official Codex device login ended before authorization completed. Delete this credential and try again later."
     return {
-        "status": "pending" if running else ("connected" if succeeded else "failed"),
+        "status": status,
         "connected": succeeded,
         "login_url": urls[-1] if urls else None,
         "device_code": device_codes[-1] if device_codes else None,
+        "message": message,
         "instructions": "Open the official Codex login URL, enter the one-time device code when shown, and complete the account authorization. The resulting credential cache is never returned.",
     }
 
@@ -169,6 +184,13 @@ async def add_auth_mount(subscription_id: Optional[str], runtime: str, volumes: 
 
 
 async def delete_auth_volume(subscription_id: str) -> None:
+    """Remove the disposable login container before deleting its auth volume."""
+    try:
+        container = await container_get(login_container_name(subscription_id))
+    except docker.errors.NotFound:
+        container = None
+    if container is not None:
+        await container_remove(container, force=True)
     try:
         volume = await volume_get(auth_volume_name(subscription_id))
     except docker.errors.NotFound:

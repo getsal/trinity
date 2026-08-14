@@ -1282,14 +1282,14 @@
                     </button>
                     <button
                       @click="addSubscription"
-                      :disabled="!newSubscription.name || !isNewCredentialValid || addingSubscription || !encryptionConfigured"
+                      :disabled="!newSubscription.name || !isNewCredentialValid || addingSubscription || !encryptionConfigured || (newSubscription.auth_type === 'codex_chatgpt_login' && !!codexLoginSubscriptionId)"
                       class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-action-primary-600 hover:bg-action-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg v-if="addingSubscription" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      {{ newSubscription.auth_type === 'codex_chatgpt_login' ? 'Start Official Login' : 'Register Credential' }}
+                      {{ newSubscription.auth_type === 'codex_chatgpt_login' && codexLoginSubscriptionId ? 'Authorization in progress' : (newSubscription.auth_type === 'codex_chatgpt_login' ? 'Start Official Login' : 'Register Credential') }}
                     </button>
                   </div>
                 </div>
@@ -4096,6 +4096,7 @@ async function addSubscription() {
   if (!newSubscription.value.name || !isNewCredentialValid.value) return
 
   if (newSubscription.value.auth_type === 'codex_chatgpt_login') {
+    if (codexLoginSubscriptionId.value) return
     await startCodexChatGPTLogin()
     return
   }
@@ -4161,7 +4162,7 @@ function stopCodexLoginPolling() {
 function applyCodexLoginStatus(status) {
   codexLoginUrl.value = status.login_url || codexLoginUrl.value
   codexDeviceCode.value = status.device_code || codexDeviceCode.value
-  codexLoginStatus.value = status.connected ? 'Connected' : (status.status || 'Waiting for device code…')
+  codexLoginStatus.value = status.message || (status.connected ? 'Connected' : (status.status || 'Waiting for device code…'))
 }
 
 async function refreshCodexLoginStatus() {
