@@ -334,7 +334,7 @@ def test_classify_bare_api_key_phrase_is_not_auth():
 def test_classify_real_unauthorized_is_auth():
     status, detail = _classify(stderr="Error: 401 Unauthorized")
     assert status == 503
-    assert "OPENAI_API_KEY" in detail
+    assert "Codex account login" in detail
 
 
 def test_classify_invalid_api_key_is_auth():
@@ -756,6 +756,13 @@ def test_load_api_key_none_when_absent_everywhere(tmp_path, monkeypatch):
     assert codex_runtime._load_openai_api_key() is None
 
 
+def test_account_login_detection_checks_presence_without_reading(tmp_path):
+    """The private Codex auth file is only presence-checked, never parsed."""
+    assert codex_runtime._has_codex_account_login(str(tmp_path)) is False
+    (tmp_path / "auth.json").write_text("not-a-real-credential")
+    assert codex_runtime._has_codex_account_login(str(tmp_path)) is True
+
+
 # ---------------------------------------------------------------------------
 # Trivial-but-load-bearing getters + is_available probe.
 # ---------------------------------------------------------------------------
@@ -1075,11 +1082,13 @@ def _install_fake_codex(
     monkeypatch.setattr(codex_runtime, "_drain_bounded", _drain)
 
     registry = _FakeRegistry()
+    registry.popen_envs = []
     monkeypatch.setattr(codex_runtime, "get_process_registry", lambda: registry)
 
     class _FakePopen:
         def __init__(self, cmd, **kwargs):
             self.cmd = cmd
+            registry.popen_envs.append(kwargs.get("env", {}))
             self.pid = 4242
             self.returncode = returncode
             # The real codex writes the -o file; emulate that for the happy path.
@@ -1179,9 +1188,10 @@ async def test_execute_codex_body_nonzero_exit_classifies_failure(tmp_path, monk
 
 @pytest.mark.asyncio
 async def test_execute_codex_body_missing_key_is_503(tmp_path, monkeypatch):
-    """No API key resolvable → 503 before any subprocess is spawned."""
+    """No API key and no account login → 503 before any subprocess is spawned."""
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
     monkeypatch.setattr(codex_runtime, "_load_openai_api_key", lambda: None)
+    monkeypatch.setattr(codex_runtime, "_has_codex_account_login", lambda _home: False)
     rt = CodexRuntime()
     with pytest.raises(HTTPException) as exc_info:
         await rt._execute_codex(
@@ -1195,6 +1205,33 @@ async def test_execute_codex_body_missing_key_is_503(tmp_path, monkeypatch):
             concurrent_reader=False,
         )
     assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_execute_codex_body_allows_account_login_without_api_key(tmp_path, monkeypatch):
+    """A connected account login is a valid official Codex auth method."""
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    registry = _install_fake_codex(
+        monkeypatch,
+        result_text="ACCOUNT LOGIN RESULT",
+        stdout_events=[{"type": "thread.started", "thread_id": "thr_account"}],
+    )
+    monkeypatch.setattr(codex_runtime, "_load_openai_api_key", lambda: None)
+    monkeypatch.setattr(codex_runtime, "_has_codex_account_login", lambda _home: True)
+    rt = CodexRuntime()
+    response, *_ = await rt._execute_codex(
+        prompt="x",
+        model=None,
+        system_prompt=None,
+        resume_thread_id=None,
+        timeout_seconds=30,
+        allowed_tools=None,
+        execution_id="exec_account_login",
+        concurrent_reader=False,
+    )
+    assert response == "ACCOUNT LOGIN RESULT"
+    assert "OPENAI_API_KEY" not in registry.popen_envs[0]
+    assert "CODEX_API_KEY" not in registry.popen_envs[0]
 
 
 @pytest.mark.asyncio

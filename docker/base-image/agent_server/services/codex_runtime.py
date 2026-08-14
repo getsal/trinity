@@ -663,7 +663,7 @@ def _classify_codex_failure(
     if any(pattern.search(haystack) for pattern in _AUTH_PATTERNS):
         return 503, (
             f"Codex authentication failure: {(stderr or metadata.error_message or '')[:300]}. "
-            "Check OPENAI_API_KEY."
+            "Check the configured API key or Codex account login."
         )
     detail = stderr.strip() or metadata.error_message or "see agent logs"
     return 500, f"Codex execution failed (exit code {return_code}): {detail[:300]}"
@@ -776,6 +776,7 @@ class CodexRuntime(AgentRuntime):
     ) -> Tuple[str, List[ExecutionLogEntry], ExecutionMetadata, List[Dict], Optional[str]]:
         execution_id = execution_id or str(uuid.uuid4())
 
+        codex_home = _ensure_codex_home()
         api_key = _load_openai_api_key()
         codex_home = _ensure_codex_home()
 
