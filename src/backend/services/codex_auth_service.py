@@ -38,6 +38,7 @@ _ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 _DEVICE_CODE_RE = re.compile(
     r"(?i:(?:one[- ]time|device)(?:[- ]authorization)?\s+code|code)\s*(?:is)?\s*[:=]?\s*([A-Z0-9]{4}-[A-Z0-9]{5}|[A-Z0-9]{8,})"
 )
+_HYPHENATED_DEVICE_CODE_RE = re.compile(r"\b[A-Z0-9]{4}-[A-Z0-9]{5}\b")
 _RATE_LIMIT_RE = re.compile(r"(?:\b429\b|too many requests|rate limit(?:ed)?)", re.IGNORECASE)
 
 
@@ -47,6 +48,14 @@ def auth_volume_name(subscription_id: str) -> str:
 
 def login_container_name(subscription_id: str) -> str:
     return f"{_LOGIN_CONTAINER_PREFIX}{subscription_id}"
+
+
+def _extract_device_codes(output: str) -> list[str]:
+    """Extract only the official short device code, never auth tokens or logs."""
+    labelled = _DEVICE_CODE_RE.findall(output)
+    # Current Codex CLI wording puts the code away from the word "code".
+    # The 4-5 uppercase format is specific to the official device flow.
+    return labelled or _HYPHENATED_DEVICE_CODE_RE.findall(output)
 
 
 async def ensure_auth_volume(subscription_id: str):
@@ -128,7 +137,7 @@ async def login_status(subscription_id: str) -> dict[str, Any]:
     raw = await container_logs(container, tail=40)
     output = _ANSI_ESCAPE_RE.sub("", raw.decode("utf-8", errors="replace"))
     urls = _URL_RE.findall(output)
-    device_codes = _DEVICE_CODE_RE.findall(output)
+    device_codes = _extract_device_codes(output)
     state = container.attrs.get("State", {})
     running = state.get("Running", False)
     succeeded = not running and state.get("ExitCode") == 0

@@ -32,6 +32,12 @@ def test_login_output_extracts_official_hyphenated_device_code():
     assert codex_auth_service._DEVICE_CODE_RE.findall(output) == ["A1B2-C3D4E"]
 
 
+def test_login_output_extracts_hyphenated_code_when_cli_wording_separates_it():
+    output = "Continue in the browser with\nA1B2-C3D4E"
+
+    assert codex_auth_service._extract_device_codes(output) == ["A1B2-C3D4E"]
+
+
 @pytest.mark.asyncio
 async def test_account_login_mount_sets_private_codex_home(monkeypatch):
     credential = SimpleNamespace(provider="openai", auth_type="codex_chatgpt_login")
