@@ -72,6 +72,7 @@
             :auth-status="authStatus"
             :subscriptions="availableSubscriptions"
             :subscription-changing="subscriptionChanging"
+            :runtime-changing="runtimeChanging"
             :action-loading="actionLoading"
             :autonomy-loading="autonomyLoading"
             :read-only-loading="readOnlyLoading"
@@ -100,6 +101,7 @@
             @git-push="syncToGithub"
             @git-refresh="refreshGitStatus"
             @update-tags="updateTags"
+            @change-runtime="changeRuntime"
             @add-tag="addTag"
             @remove-tag="removeTag"
             @rename="renameAgent"
@@ -505,6 +507,7 @@ const allTags = ref([])
 const authStatus = ref(null)
 const availableSubscriptions = ref(null)
 const subscriptionChanging = ref(false)
+const runtimeChanging = ref(false)
 
 // Token usage stats (issue #250) — DB-sourced, persists across restarts
 const tokenStats = ref(null)
@@ -1223,6 +1226,27 @@ async function changeSubscription(subscriptionName) {
     showNotification(err.response?.data?.detail || 'Failed to update subscription', 'error')
   } finally {
     subscriptionChanging.value = false
+  }
+}
+
+async function changeRuntime(runtime) {
+  if (!agent.value?.name || runtime === agent.value.runtime) return
+  const previousRuntime = agent.value.runtime
+  runtimeChanging.value = true
+  try {
+    await axios.post(
+      `/api/agents/${encodeURIComponent(agent.value.name)}/runtime`,
+      { runtime },
+      { headers: authStore.authHeader }
+    )
+    agent.value.runtime = runtime
+    showNotification(`Runtime changed to ${runtime}.`, 'success')
+    await loadAgent()
+  } catch (err) {
+    agent.value.runtime = previousRuntime
+    showNotification(err.response?.data?.detail || 'Runtime migration failed; the previous container was retained.', 'error')
+  } finally {
+    runtimeChanging.value = false
   }
 }
 

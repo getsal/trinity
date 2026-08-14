@@ -142,8 +142,20 @@
             >
               ⚡ circuit open
             </span>
-            <!-- Runtime badge (Claude/Gemini) -->
+            <!-- Runtime badge and deliberate runtime migration control -->
             <RuntimeBadge :runtime="agent.runtime" />
+            <select
+              v-if="agent.can_share"
+              class="text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-1 py-0.5"
+              :disabled="runtimeChanging"
+              :value="agent.runtime || 'claude-code'"
+              title="Change runtime. Trinity validates the selected credential, recreates only this agent container, and rolls back if it cannot start."
+              @change="$emit('change-runtime', $event.target.value)"
+            >
+              <option value="claude-code">Claude</option>
+              <option value="codex">Codex</option>
+              <option value="gemini-cli">Gemini</option>
+            </select>
             <!-- Ephemeral ghost badge (trinity-enterprise#69) -->
             <span
               v-if="agent.ephemeral"
@@ -554,6 +566,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  runtimeChanging: {
+    type: Boolean,
+    default: false
+  },
   actionLoading: {
     type: Boolean,
     default: false
@@ -675,7 +691,8 @@ const emit = defineEmits([
   'set-label',
   'open-avatar-modal',
   'cycle-emotion',
-  'change-subscription'
+  'change-subscription',
+  'change-runtime'
 ])
 
 
