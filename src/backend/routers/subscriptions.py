@@ -113,7 +113,7 @@ async def register_subscription(
         raise HTTPException(status_code=500, detail=f"Failed to register subscription: {str(e)}")
 
 
-@router.post("/codex-chatgpt-login", response_model=SubscriptionCredential)
+@router.post("/codex-chatgpt-login", response_model=None)
 async def start_codex_chatgpt_login(
     request: CodexChatGPTLoginStart,
     current_user: User = Depends(get_current_user),
