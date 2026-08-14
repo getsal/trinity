@@ -36,7 +36,7 @@ _AUTH_VOLUME_PREFIX = "trinity-codex-auth-"
 _URL_RE = re.compile(r"https://[^\s'\"]+")
 _ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 _DEVICE_CODE_RE = re.compile(
-    r"(?i:(?:one[- ]time|device)(?:[- ]authorization)?\s+code|code)\s*(?:is)?\s*[:=]?\s*([A-Z0-9]{8,})"
+    r"(?i:(?:one[- ]time|device)(?:[- ]authorization)?\s+code|code)\s*(?:is)?\s*[:=]?\s*([A-Z0-9]{4}-[A-Z0-9]{5}|[A-Z0-9]{8,})"
 )
 _RATE_LIMIT_RE = re.compile(r"(?:\b429\b|too many requests|rate limit(?:ed)?)", re.IGNORECASE)
 
