@@ -137,9 +137,18 @@ async def start_codex_chatgpt_login(
         rate_limit_tier=request.rate_limit_tier,
     )
     from services.codex_auth_service import start_login
-    await start_login(credential.id)
+    login = await start_login(credential.id)
     logger.info("Started official Codex login for credential %s", credential.name)
-    return credential
+    # Return only non-secret device-flow metadata.  The Settings UI needs this
+    # immediately; waiting for a second request can race the CLI's first log
+    # line and leave the user on OpenAI's code-entry page without a code.
+    return {
+        "id": credential.id,
+        "name": credential.name,
+        "provider": credential.provider,
+        "auth_type": credential.auth_type,
+        **login,
+    }
 
 
 @router.get("/codex-chatgpt-login/{subscription_id}")

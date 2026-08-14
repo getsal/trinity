@@ -1262,10 +1262,12 @@
 
                   <div v-else class="mt-4 text-xs text-gray-500 dark:text-gray-400">
                     Trinity opens the official Codex device-login flow in a dedicated credential store. No API key, password, or browser cookie is requested.
-                    <template v-if="codexLoginUrl">
-                      <a :href="codexLoginUrl" target="_blank" rel="noopener" class="ml-1 text-action-primary-600 hover:underline">Open official login</a>
-                      <span v-if="codexDeviceCode" class="ml-1">Enter code: <code class="font-mono font-semibold">{{ codexDeviceCode }}</code></span>
-                    </template>
+                    <div v-if="codexDeviceCode" class="mt-3 rounded border border-action-primary-300 dark:border-action-primary-700 bg-action-primary-50 dark:bg-action-primary-900/20 p-3 text-gray-800 dark:text-gray-100">
+                      <p class="font-medium">1. Enter this code on the official OpenAI page</p>
+                      <code class="mt-1 block text-lg font-bold tracking-widest text-action-primary-700 dark:text-action-primary-300">{{ codexDeviceCode }}</code>
+                      <a v-if="codexLoginUrl" :href="codexLoginUrl" target="_blank" rel="noopener" class="mt-2 inline-block text-action-primary-600 hover:underline">2. Open official login</a>
+                      <p class="mt-2 text-xs">{{ codexLoginStatus || 'Waiting for authorization…' }}</p>
+                    </div>
                     <span v-else-if="codexLoginStatus" class="ml-1">{{ codexLoginStatus }}</span>
                   </div>
 
@@ -2394,7 +2396,7 @@ Example:
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useRole } from '../composables/useRole'
 import { useBuildInfo } from '../composables/useBuildInfo'
@@ -2931,6 +2933,8 @@ const encryptionConfigured = ref(true)
 const codexLoginUrl = ref('')
 const codexDeviceCode = ref('')
 const codexLoginStatus = ref('')
+const codexLoginSubscriptionId = ref('')
+let codexLoginPollTimer = null
 const newSubscription = ref({
   name: '',
   type: 'max',
@@ -2973,10 +2977,12 @@ const credentialValueHelp = computed(() => {
 })
 
 watch(() => newSubscription.value.provider, (provider) => {
+  stopCodexLoginPolling()
   newSubscription.value.auth_type = provider === 'anthropic' ? 'claude_oauth' : 'api_key'
   codexLoginUrl.value = ''
   codexDeviceCode.value = ''
   codexLoginStatus.value = ''
+  codexLoginSubscriptionId.value = ''
 })
 
 // Agent assignment state (for subscription expanded rows)
@@ -4072,6 +4078,7 @@ async function loadSubscriptions() {
 }
 
 function clearNewSubscription() {
+  stopCodexLoginPolling()
   newSubscription.value = {
     name: '',
     type: 'max',
@@ -4080,7 +4087,9 @@ function clearNewSubscription() {
     auth_type: 'claude_oauth'
   }
   codexLoginUrl.value = ''
+  codexDeviceCode.value = ''
   codexLoginStatus.value = ''
+  codexLoginSubscriptionId.value = ''
 }
 
 async function addSubscription() {
@@ -4130,12 +4139,9 @@ async function startCodexChatGPTLogin() {
     const created = await axios.post('/api/subscriptions/codex-chatgpt-login', {
       name: newSubscription.value.name
     }, { headers: authStore.authHeader })
-    const status = await axios.get(`/api/subscriptions/codex-chatgpt-login/${created.data.id}`, {
-      headers: authStore.authHeader
-    })
-    codexLoginUrl.value = status.data.login_url || ''
-    codexDeviceCode.value = status.data.device_code || ''
-    codexLoginStatus.value = status.data.connected ? 'Connected' : (status.data.status || 'Pending')
+    codexLoginSubscriptionId.value = created.data.id
+    applyCodexLoginStatus(created.data)
+    await refreshCodexLoginStatus()
     await loadSubscriptions()
   } catch (e) {
     codexLoginStatus.value = ''
@@ -4144,6 +4150,43 @@ async function startCodexChatGPTLogin() {
     addingSubscription.value = false
   }
 }
+
+function stopCodexLoginPolling() {
+  if (codexLoginPollTimer) {
+    clearTimeout(codexLoginPollTimer)
+    codexLoginPollTimer = null
+  }
+}
+
+function applyCodexLoginStatus(status) {
+  codexLoginUrl.value = status.login_url || codexLoginUrl.value
+  codexDeviceCode.value = status.device_code || codexDeviceCode.value
+  codexLoginStatus.value = status.connected ? 'Connected' : (status.status || 'Waiting for device code…')
+}
+
+async function refreshCodexLoginStatus() {
+  const subscriptionId = codexLoginSubscriptionId.value
+  if (!subscriptionId) return
+  try {
+    const response = await axios.get(`/api/subscriptions/codex-chatgpt-login/${subscriptionId}`, {
+      headers: authStore.authHeader
+    })
+    applyCodexLoginStatus(response.data)
+    if (response.data.connected) {
+      stopCodexLoginPolling()
+      await loadSubscriptions()
+      return
+    }
+    if (response.data.status === 'pending') {
+      stopCodexLoginPolling()
+      codexLoginPollTimer = setTimeout(refreshCodexLoginStatus, 1500)
+    }
+  } catch (e) {
+    codexLoginStatus.value = e.response?.data?.detail || 'Unable to refresh login status'
+  }
+}
+
+onBeforeUnmount(stopCodexLoginPolling)
 
 async function deleteSubscription(subscription) {
   if (!confirm(`Delete subscription "${subscription.name}"?\n\nThis will clear the subscription from all ${subscription.agent_count || 0} assigned agent(s).`)) {
