@@ -2332,10 +2332,24 @@ class DatabaseManager:
     # Subscription Credentials (delegated to db/subscriptions.py) - SUB-002
     # =========================================================================
 
-    def create_subscription(self, name: str, token: str, owner_id: int,
-                            subscription_type: str = None, rate_limit_tier: str = None):
+    def create_subscription(
+        self,
+        name: str,
+        token: str,
+        owner_id: int,
+        subscription_type: str = None,
+        rate_limit_tier: str = None,
+        provider: str = "anthropic",
+        auth_type: str = "claude_oauth",
+    ):
         return self._subscription_ops.create_subscription(
-            name, token, owner_id, subscription_type, rate_limit_tier
+            name=name,
+            token=token,
+            owner_id=owner_id,
+            provider=provider,
+            auth_type=auth_type,
+            subscription_type=subscription_type,
+            rate_limit_tier=rate_limit_tier,
         )
 
     def get_subscription(self, subscription_id: str):
@@ -2374,8 +2388,8 @@ class DatabaseManager:
     def get_agent_subscription_id(self, agent_name: str):
         return self._subscription_ops.get_agent_subscription_id(agent_name)
 
-    def get_least_used_subscription(self):
-        return self._subscription_ops.get_least_used_subscription()
+    def get_least_used_subscription(self, provider: str = None):
+        return self._subscription_ops.get_least_used_subscription(provider=provider)
 
     # --- SUB-003: Rate-Limit Tracking ---
 
