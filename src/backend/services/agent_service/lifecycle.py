@@ -1347,7 +1347,7 @@ async def _provision_folders_and_run_agent_container(
         # covers BOTH recreate_container_with_updated_config and
         # recreate_missing_container (this is their shared tail).
         log_config=AGENT_LOG_CONFIG,
-        network='trinity-agent-network',
+        network=os.getenv('TRINITY_AGENT_NETWORK', 'trinity-agent-network'),
         mem_limit=memory,
         # #1126: nano_cpus (Linux CFS quota → HostConfig.NanoCpus), NOT
         # cpu_count — docker-py's cpu_count maps to the Windows-only CpuCount

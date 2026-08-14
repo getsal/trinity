@@ -481,7 +481,7 @@ class SystemAgentService:
             'trinity-agent-base:latest',
             name=f"agent-{SYSTEM_AGENT_NAME}",
             detach=True,
-            network='trinity-agent-network',
+            network=os.getenv('TRINITY_AGENT_NETWORK', 'trinity-agent-network'),
             ports={'22/tcp': ssh_port},
             volumes=volumes,
             environment=env_vars,

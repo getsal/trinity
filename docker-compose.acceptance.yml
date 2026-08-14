@@ -8,6 +8,7 @@ services:
     ports: !reset ["127.0.0.1:18000:8000"]
     environment:
       DOCKER_HOST: unix:///run/docker-trinity.sock
+      TRINITY_AGENT_NETWORK: trinity-acceptance-agent-network
     volumes:
       - /run/docker-trinity.sock:/run/docker-trinity.sock:ro
   frontend:

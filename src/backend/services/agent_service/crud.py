@@ -1943,7 +1943,8 @@ async def _create_agent_container(
 ):
     """`docker run` the agent container with the baseline security posture
     (cap_drop ALL + mode caps, AppArmor, tmpfs #1098, mem/cpu limits). AC #5:
-    the agent network is HARD-CODED here — agents never join the platform net."""
+    agents default to the dedicated agent network; the test harness may override
+    it through `TRINITY_AGENT_NETWORK`."""
     # Get system-wide full_capabilities setting (not per-agent)
     full_capabilities = get_agent_full_capabilities()
 
@@ -2001,7 +2002,7 @@ async def _create_agent_container(
         # unbounded, so without this the log grows until the Docker data root
         # fills and dockerd wedges. Creation-time — see AGENT_LOG_CONFIG.
         log_config=AGENT_LOG_CONFIG,
-        network='trinity-agent-network',
+        network=os.getenv('TRINITY_AGENT_NETWORK', 'trinity-agent-network'),
         # #1197: cpu/memory normalized + validated above (raises 400 on
         # a bad template value), so these are guaranteed Docker-valid.
         mem_limit=config.resources['memory'],
