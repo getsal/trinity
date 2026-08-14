@@ -28,7 +28,21 @@ from services.agent_service.helpers import validate_base_image
 from services.agent_runtime_state import clear_agent_breakers
 from services.settings_service import get_anthropic_api_key, get_github_pat, get_agent_full_capabilities, get_agent_default_resources
 from services.skill_service import skill_service
-from .helpers import check_shared_folder_mounts_match, check_api_key_env_matches, check_github_pat_env_matches, check_resource_limits_match, check_full_capabilities_match, check_guardrails_env_matches, check_agent_auth_token_env_matches, check_agent_mcp_key_matches, check_base_image_matches, is_claude_runtime, is_system_agent_name
+from .helpers import (
+    check_shared_folder_mounts_match,
+    check_api_key_env_matches,
+    check_github_pat_env_matches,
+    check_resource_limits_match,
+    check_full_capabilities_match,
+    check_guardrails_env_matches,
+    check_agent_auth_token_env_matches,
+    check_agent_mcp_key_matches,
+    check_base_image_matches,
+    is_claude_runtime,
+    is_system_agent_name,
+    credential_env_var,
+    get_runtime_credential_provider,
+)
 from services.agent_auth import derive_agent_token
 from utils.helpers import utc_now_iso
 from .file_sharing import check_public_folder_mount_matches
@@ -878,41 +892,51 @@ async def recreate_container_with_updated_config(
     # pick up the default on this recreate.
     env_vars.setdefault('TMPDIR', AGENT_DEFAULT_TMPDIR)
 
-    # Update auth env vars based on current setting (SUB-002).
-    # Claude Code prioritizes ANTHROPIC_API_KEY over CLAUDE_CODE_OAUTH_TOKEN,
-    # so when a subscription is assigned we must remove the API key and set
-    # the token env var instead.
-    #
-    # This whole juggle is Claude-only: subscriptions are Claude-OAuth tokens.
-    # Non-Claude runtimes (Gemini, Codex) authenticate from their own .env
-    # (CRED-002) and must NEVER receive a Claude subscription token on recreate,
-    # even if a subscription row somehow exists for them (#1187 decision 7).
+    # Refresh only a credential compatible with the selected runtime.  Existing
+    # Claude rows remain anthropic/claude_oauth after migration.
     _runtime = (
         env_vars.get('AGENT_RUNTIME')
         or labels.get('trinity.agent-runtime')
         or 'claude-code'
     )
+    _provider = get_runtime_credential_provider(_runtime)
     _is_claude_runtime = is_claude_runtime(_runtime)
     subscription_id = db.get_agent_subscription_id(agent_name)
     has_subscription = subscription_id is not None
     use_platform_key = db.get_use_platform_api_key(agent_name)
 
-    if not _is_claude_runtime:
-        # Non-Claude: leave the agent's own credentials in place; never inject a
-        # Claude token.
-        env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
-    elif has_subscription:
-        # Subscription assigned — inject token, remove API key
+    if has_subscription:
+        credential = db.get_subscription(subscription_id)
         token = db.get_subscription_token(subscription_id)
-        if token:
-            env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
-        env_vars.pop('ANTHROPIC_API_KEY', None)
+        env_name = credential_env_var(
+            getattr(credential, "provider", "anthropic"),
+            getattr(credential, "auth_type", "claude_oauth"),
+        ) if credential else None
+        if credential and credential.provider == _provider and token and env_name:
+            env_vars[env_name] = token
+            if _provider == "anthropic":
+                env_vars.pop('ANTHROPIC_API_KEY', None)
+        else:
+            logger.warning(
+                "Skipping incompatible credential refresh for agent %s "
+                "(runtime=%s, credential=%s)",
+                agent_name,
+                _runtime,
+                getattr(credential, "provider", None),
+            )
+            env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
+            if not _is_claude_runtime:
+                env_vars.pop('ANTHROPIC_API_KEY', None)
     elif use_platform_key:
-        # No subscription, use platform API key
-        env_vars['ANTHROPIC_API_KEY'] = get_anthropic_api_key()
-        env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
+        if _is_claude_runtime:
+            env_vars['ANTHROPIC_API_KEY'] = get_anthropic_api_key()
+            env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
+        else:
+            env_vars.pop('ANTHROPIC_API_KEY', None)
+            env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
     else:
-        # No subscription, no platform key — user will auth in terminal
+        # No stored credential. Claude may authenticate interactively; other
+        # runtimes retain their explicitly injected agent credentials only.
         env_vars.pop('ANTHROPIC_API_KEY', None)
         env_vars.pop('CLAUDE_CODE_OAUTH_TOKEN', None)
 
@@ -1110,6 +1134,11 @@ async def recreate_container_with_updated_config(
             vol_name = m.get("Name")
             if vol_name:
                 volumes[vol_name] = {"bind": dest, "mode": "rw" if m.get("RW", True) else "ro"}
+
+    from services.codex_auth_service import add_auth_mount
+    await add_auth_mount(
+        db.get_agent_subscription_id(agent_name), _runtime, volumes, env_vars
+    )
 
     # #1854: caller-forced env, applied LAST so it wins over every derived rule
     # above (see the `env_overrides` note in this function's docstring). Keys are
@@ -1598,6 +1627,10 @@ async def recreate_missing_container(agent_name: str):
             "mode": "rw",
         }
     }
+    from services.codex_auth_service import add_auth_mount
+    await add_auth_mount(
+        db.get_agent_subscription_id(agent_name), runtime, base_volumes, env_vars
+    )
 
     logger.info("Rebuilding missing container for recovered agent %s (#1559)", agent_name)
     return await _provision_folders_and_run_agent_container(
@@ -1620,6 +1653,15 @@ def _apply_persisted_auth_env(agent_name: str, env_vars: dict, runtime: str) -> 
     if not is_claude_runtime(runtime):
         env_vars.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
         env_vars.pop("ANTHROPIC_API_KEY", None)
+        subscription_id = db.get_agent_subscription_id(agent_name)
+        if subscription_id:
+            subscription = db.get_subscription(subscription_id)
+            if subscription:
+                from services.agent_service.helpers import credential_env_var
+                env_name = credential_env_var(subscription.provider, subscription.auth_type)
+                token = db.get_subscription_token(subscription_id)
+                if env_name and token:
+                    env_vars[env_name] = token
     else:
         subscription_id = db.get_agent_subscription_id(agent_name)
         if subscription_id:

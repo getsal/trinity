@@ -58,6 +58,8 @@ class SubscriptionOperations:
         data = {
             "id": row_dict["id"],
             "name": row_dict["name"],
+            "provider": row_dict.get("provider") or "anthropic",
+            "auth_type": row_dict.get("auth_type") or "claude_oauth",
             "subscription_type": row_dict.get("subscription_type"),
             "rate_limit_tier": row_dict.get("rate_limit_tier"),
             "owner_id": row_dict["owner_id"],
@@ -82,6 +84,8 @@ class SubscriptionOperations:
         return [
             subscription_credentials.c.id,
             subscription_credentials.c.name,
+            subscription_credentials.c.provider,
+            subscription_credentials.c.auth_type,
             subscription_credentials.c.subscription_type,
             subscription_credentials.c.rate_limit_tier,
             subscription_credentials.c.owner_id,
@@ -126,6 +130,8 @@ class SubscriptionOperations:
         name: str,
         token: str,
         owner_id: int,
+        provider: str = "anthropic",
+        auth_type: str = "claude_oauth",
         subscription_type: Optional[str] = None,
         rate_limit_tier: Optional[str] = None,
     ) -> SubscriptionCredential:
@@ -167,6 +173,8 @@ class SubscriptionOperations:
                     .where(subscription_credentials.c.id == subscription_id)
                     .values(
                         encrypted_credentials=encrypted,
+                        provider=provider,
+                        auth_type=auth_type,
                         subscription_type=subscription_type,
                         rate_limit_tier=rate_limit_tier,
                         updated_at=now,
@@ -180,6 +188,8 @@ class SubscriptionOperations:
                         id=subscription_id,
                         name=name,
                         encrypted_credentials=encrypted,
+                        provider=provider,
+                        auth_type=auth_type,
                         subscription_type=subscription_type,
                         rate_limit_tier=rate_limit_tier,
                         owner_id=owner_id,
@@ -621,7 +631,7 @@ class SubscriptionOperations:
         with get_engine().begin() as conn:
             return conn.execute(stmt).rowcount
 
-    def get_least_used_subscription(self) -> Optional[SubscriptionCredential]:
+    def get_least_used_subscription(self, provider: Optional[str] = None) -> Optional[SubscriptionCredential]:
         """
         Get subscription with fewest assigned agents (round-robin).
 
@@ -642,6 +652,8 @@ class SubscriptionOperations:
             )
             .order_by(agent_count.asc(), subscription_credentials.c.name.asc())
         )
+        if provider:
+            stmt = stmt.where(subscription_credentials.c.provider == provider)
         with get_engine().connect() as conn:
             rows = conn.execute(stmt).mappings().all()
 

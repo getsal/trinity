@@ -165,6 +165,23 @@ async def container_get(container_id: str) -> Any:
     )
 
 
+async def container_create(image: str, command=None, **kwargs) -> Any:
+    """Create (but do not start) a container without blocking the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        _docker_executor,
+        lambda: docker_client.containers.create(image, command=command, **kwargs),
+    )
+
+
+async def container_logs(container, **kwargs) -> bytes:
+    """Read bounded container logs without blocking the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        _docker_executor, lambda: container.logs(**kwargs)
+    )
+
+
 # =============================================================================
 # Image Operations
 # =============================================================================

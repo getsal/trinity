@@ -8,7 +8,7 @@ For API request/response models, see models.py.
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional, List
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # =========================================================================
@@ -859,24 +859,71 @@ class NotificationAcknowledge(BaseModel):
 # =========================================================================
 
 class SubscriptionCredentialCreate(BaseModel):
-    """Request model for registering a subscription token from `claude setup-token`."""
+    """Request model for an encrypted runtime credential.
+
+    Existing requests omit ``provider`` and ``auth_type`` and therefore remain
+    Claude Code OAuth credentials. ChatGPT/Codex login is intentionally not
+    accepted by this token endpoint: it is an official CLI auth-state flow,
+    not an API key, and is started through the dedicated login endpoint.
+    """
     name: str  # Unique name for the subscription (e.g., "eugene-max")
-    token: str  # Long-lived token from `claude setup-token` (sk-ant-oat01-...)
+    token: str
+    provider: str = "anthropic"
+    auth_type: str = "claude_oauth"
     subscription_type: Optional[str] = None  # "max", "pro", etc.
     rate_limit_tier: Optional[str] = None  # Rate limit tier if known
 
+    @field_validator('provider', 'auth_type')
+    @classmethod
+    def normalize_credential_kind(cls, value: str) -> str:
+        return value.strip().lower().replace("-", "_")
+
     @field_validator('token')
     @classmethod
-    def validate_token_prefix(cls, v: str) -> str:
-        if not v.startswith('sk-ant-oat01-'):
-            raise ValueError("Token must start with 'sk-ant-oat01-' (from `claude setup-token`)")
-        return v
+    def validate_token_present(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Credential value must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_provider_auth_type(self):
+        supported = {
+            "anthropic": {"claude_oauth"},
+            "openai": {"api_key"},
+            "google": {"api_key"},
+        }
+        if self.provider not in supported or self.auth_type not in supported[self.provider]:
+            raise ValueError(
+                "Unsupported provider/auth_type combination. Supported combinations: "
+                "anthropic/claude_oauth, openai/api_key, google/api_key"
+            )
+        if self.provider == "anthropic" and not self.token.startswith("sk-ant-oat01-"):
+            raise ValueError("Anthropic OAuth token must start with 'sk-ant-oat01-' (from `claude setup-token`)")
+        if self.provider == "openai" and not self.token.startswith("sk-"):
+            raise ValueError("OpenAI API key must start with 'sk-'")
+        return self
+
+
+class CodexChatGPTLoginStart(BaseModel):
+    """Create a credential backed by the official Codex CLI login flow."""
+    name: str
+    subscription_type: Optional[str] = None
+    rate_limit_tier: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Credential name must not be empty")
+        return value.strip()
 
 
 class SubscriptionCredential(BaseModel):
-    """A registered Claude subscription credential."""
+    """A registered encrypted runtime credential (without its secret value)."""
     id: str
     name: str
+    provider: str = "anthropic"
+    auth_type: str = "claude_oauth"
     subscription_type: Optional[str] = None
     rate_limit_tier: Optional[str] = None
     owner_id: int

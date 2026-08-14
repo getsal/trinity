@@ -52,7 +52,14 @@ from utils.helpers import parse_iso_timestamp, sanitize_agent_name, to_utc_iso, 
 from utils.safe_yaml import HardenedYamlError, load_template_yaml
 from .fork_to_own import fork_template_to_own_repo
 from . import snapshot_import
-from .helpers import validate_base_image, is_claude_runtime, validate_runtime
+from .helpers import (
+    validate_base_image,
+    is_claude_runtime,
+    validate_runtime,
+    credential_env_var,
+    get_runtime_credential_provider,
+    is_codex_chatgpt_login,
+)
 from .lifecycle import RESTRICTED_CAPABILITIES, FULL_CAPABILITIES
 from .capabilities import (
     AGENT_TMPFS_MOUNT,
@@ -1510,7 +1517,6 @@ def _build_base_env(config: AgentConfig) -> dict:
     env_vars = {
         'AGENT_NAME': config.name,
         'CREDENTIALS_FILE': '/config/credentials.json',
-        'ANTHROPIC_API_KEY': get_anthropic_api_key(),
         'ENABLE_SSH': 'true',
         'ENABLE_AGENT_UI': 'true',
         'AGENT_SERVER_PORT': '8000',
@@ -1523,6 +1529,10 @@ def _build_base_env(config: AgentConfig) -> dict:
         # The dir is created at container start by startup.sh.
         'TMPDIR': AGENT_DEFAULT_TMPDIR,
     }
+    # A platform Anthropic key is a Claude-only fallback.  Do not put it in a
+    # Codex or Gemini container merely because it exists on the platform.
+    if is_claude_runtime(config.runtime):
+        env_vars['ANTHROPIC_API_KEY'] = get_anthropic_api_key()
 
     # #1369: operator-configurable headless per-tool stall-watchdog ceiling.
     # Only propagate when the backend env sets it — an unset value leaves the
@@ -1543,36 +1553,51 @@ def _build_base_env(config: AgentConfig) -> dict:
 
 
 def _apply_subscription_env(config: AgentConfig, env_vars: dict) -> Optional[str]:
-    """#74: auto-assign a round-robin Claude subscription (Claude runtimes only).
-    Sets `CLAUDE_CODE_OAUTH_TOKEN` and pops `ANTHROPIC_API_KEY` on success.
-    Returns the assigned subscription id (None when skipped)."""
-    # Auto-assign subscription (round-robin) — #74.
-    # Subscriptions are Claude-OAuth tokens (CLAUDE_CODE_OAUTH_TOKEN) and apply
-    # ONLY to the Claude Code runtime. Non-Claude runtimes (Gemini, Codex) bring
-    # their own credentials via .env (CRED-002), so skip the assign entirely —
-    # otherwise a Codex agent would get a persisted subscription_id
-    # (has_subscription=True) and a spurious Claude token injected on every
-    # create/recreate (#1187 decision 7).
+    """Auto-assign an encrypted credential compatible with ``config.runtime``.
+
+    Legacy rows are ``anthropic/claude_oauth``.  A Codex or Gemini agent only
+    considers OpenAI or Google credentials respectively, so an Anthropic key is
+    neither required nor injected for unrelated runtimes.
+    """
     auto_assigned_subscription_id = None
-    if is_claude_runtime(config.runtime):
-        try:
-            least_used = db.get_least_used_subscription()
-            if least_used:
-                token = db.get_subscription_token(least_used.id)
-                if token:
-                    env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
-                    env_vars.pop('ANTHROPIC_API_KEY', None)
-                    auto_assigned_subscription_id = least_used.id
-                    logger.info(f"Auto-assigned subscription '{least_used.name}' to agent {config.name}")
-                else:
-                    logger.warning(f"Failed to decrypt subscription '{least_used.name}' token, using platform API key")
-        except Exception as e:
-            logger.warning(f"Subscription auto-assign failed for {config.name}: {e}")
-    else:
+    provider = get_runtime_credential_provider(config.runtime)
+    if not provider:
         logger.info(
-            f"Skipping subscription auto-assign for agent {config.name} "
-            f"(runtime={(config.runtime or 'claude-code')!r} is non-Claude — uses its own .env credentials)"
+            f"Skipping credential auto-assign for agent {config.name}: "
+            f"unknown runtime {(config.runtime or 'claude-code')!r}"
         )
+        return None
+
+    try:
+        least_used = db.get_least_used_subscription(provider=provider)
+        if not least_used:
+            return None
+        if is_codex_chatgpt_login(least_used.provider, least_used.auth_type):
+            # The official account login is a writable auth.json volume, not an
+            # environment variable. It requires a completed interactive login
+            # and a serialized assignment, so never auto-select it at create.
+            return None
+        token = db.get_subscription_token(least_used.id)
+        env_name = credential_env_var(least_used.provider, least_used.auth_type)
+        if not token or not env_name:
+            logger.warning(
+                "Credential '%s' for provider '%s' could not be applied",
+                least_used.name,
+                provider,
+            )
+            return None
+        env_vars[env_name] = token
+        if provider == "anthropic":
+            env_vars.pop("ANTHROPIC_API_KEY", None)
+        auto_assigned_subscription_id = least_used.id
+        logger.info(
+            "Auto-assigned %s credential '%s' to agent %s",
+            provider,
+            least_used.name,
+            config.name,
+        )
+    except Exception as e:
+        logger.warning("Credential auto-assign failed for %s: %s", config.name, e)
     return auto_assigned_subscription_id
 
 
@@ -1583,7 +1608,7 @@ def _apply_gemini_and_otel_env(config: AgentConfig, env_vars: dict) -> None:
     # Gemini CLI expects GEMINI_API_KEY environment variable
     if config.runtime == 'gemini-cli' or config.runtime == 'gemini':
         google_api_key = os.getenv('GOOGLE_API_KEY', '')
-        if google_api_key:
+        if google_api_key and 'GEMINI_API_KEY' not in env_vars:
             env_vars['GEMINI_API_KEY'] = google_api_key  # Gemini CLI expects this name
         else:
             logger.warning("Gemini runtime selected but GOOGLE_API_KEY not configured")
@@ -1868,6 +1893,8 @@ async def _build_volume_mounts(
     template_volume: Optional[dict],
     cred_files_volume: Optional[dict],
     template_shared_folders: Optional[dict],
+    subscription_id: Optional[str],
+    env_vars: dict,
 ) -> dict:
     """Assemble the container volume-mount spec: config/creds/encrypted-data
     binds, the durable workspace (skipped for volume-less ghosts, ent#69), the
@@ -1902,6 +1929,8 @@ async def _build_volume_mounts(
 
     await _shared_folder_mounts(config, volumes, template_shared_folders)
     await _public_volume_mount(config, volumes)
+    from services.codex_auth_service import add_auth_mount
+    await add_auth_mount(subscription_id, config.runtime, volumes, env_vars)
     return volumes
 
 
@@ -2855,6 +2884,8 @@ async def create_agent_internal(
                 template_volume,
                 cred_files_volume,
                 tr.template_shared_folders,
+                auto_assigned_subscription_id,
+                env_vars,
             )
             container = await _create_agent_container(
                 config, volumes, env_vars, current_user, ephemeral_expires_at

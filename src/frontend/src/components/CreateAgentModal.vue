@@ -52,6 +52,21 @@
               </div>
 
               <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Runtime</label>
+                <select
+                  v-model="form.runtime"
+                  class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm px-3 py-2 focus:ring-action-primary-500 focus:border-action-primary-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="claude-code">Claude Code</option>
+                  <option value="codex">OpenAI Codex</option>
+                  <option value="gemini-cli">Gemini CLI</option>
+                </select>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Trinity uses only a configured credential compatible with this runtime. Other provider credentials are not required.
+                </p>
+              </div>
+
+              <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Template</label>
 
                 <!-- Loading state -->
@@ -358,7 +373,8 @@ const agentsStore = useAgentsStore()
 const form = reactive({
   name: '',
   display_label: '',   // ent#1640: optional human-facing display name
-  template: props.initialTemplate || ''
+  template: props.initialTemplate || '',
+  runtime: 'claude-code'
 })
 
 const githubRepoUrl = ref('')
@@ -494,7 +510,8 @@ const createAgent = async () => {
   try {
     // Only send name and template - backend handles everything else
     const payload = {
-      name: form.name
+      name: form.name,
+      runtime: form.runtime
     }
     // ent#1640: optional display name (trimmed); omit when blank so the agent
     // falls back to its slug, exactly as before.

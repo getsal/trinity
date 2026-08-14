@@ -1,13 +1,14 @@
-# Subscription Credentials
+# Runtime Credentials
 
-Share Claude Max/Pro subscription tokens across multiple agents, with automatic assignment, health monitoring, and auto-switch on rate limits.
+Store encrypted credentials for Claude Code, OpenAI Codex, and Gemini CLI. Trinity only assigns a credential to a compatible runtime.
 
 > 📺 **Watch:** [Trinity Platform Demo](https://youtu.be/ivljtZqsxeo) *(May 2026)* · [all videos](../videos.md)
 
 ## Concepts
 
-- **Subscription** -- A Claude Max or Pro subscription token registered with Trinity. Stored encrypted (AES-256-GCM). Injected as an environment variable to assigned agents.
-- **Round-Robin Assignment** -- New agents automatically get a subscription assigned. The subscription with the fewest agents is selected first, with alphabetical tie-break.
+- **Runtime credential** -- An encrypted provider credential. Existing Claude Max/Pro OAuth records stay supported as `anthropic` / `claude_oauth` credentials.
+- **Provider compatibility** -- Claude Code accepts Anthropic OAuth, Codex accepts an OpenAI API key or an official ChatGPT/Codex CLI login, and Gemini CLI accepts Google API keys. Trinity never injects an Anthropic credential into a Codex or Gemini container.
+- **Round-Robin Assignment** -- New agents auto-assign the compatible credential with the fewest agents, with an alphabetical tie-break.
 - **Auto-Switch (SUB-003)** -- When an agent hits a rate-limit (429) or auth-class failure, Trinity automatically switches it to a different subscription. The new token is applied via a **hot-reload** of the running container -- no container recreate -- so in-flight executions keep running. Default ON; toggle it off in the Subscriptions section of Settings.
 - **Hot-Reload Rotation** -- Manual token changes hot-reload the same way: re-registering a subscription with a fresh token pushes the new token to every running agent on that subscription, and reassigning an agent from one subscription to another swaps the token in place. In-flight turns finish on the old token; the next turn uses the new one. Container recreation is only needed for image, template, or auth-*mode* changes (e.g. switching between subscription and API key).
 
@@ -15,10 +16,23 @@ Share Claude Max/Pro subscription tokens across multiple agents, with automatic 
 
 1. Go to the **Settings** page.
 2. In the Subscriptions section, click **Register Subscription**.
-3. Enter a subscription name and token.
-4. The subscription is encrypted and stored.
-5. Expand a subscription row to see assigned agents with assign/unassign controls.
-6. New agents auto-assign via round-robin.
+3. Enter a credential name, provider, authentication type, and credential value.
+4. The credential is encrypted and stored; its value is never returned by the API.
+5. Select the runtime when creating an agent. Trinity only considers matching credentials.
+6. Expand a credential row to see assigned agents with assign/unassign controls.
+
+### Supported authentication
+
+| Runtime | Provider/auth type | Injected variable |
+|---|---|---|
+| Claude Code | `anthropic` / `claude_oauth` | `CLAUDE_CODE_OAUTH_TOKEN` |
+| OpenAI Codex (API key) | `openai` / `api_key` | `OPENAI_API_KEY` |
+| OpenAI Codex (account) | `openai` / `codex_chatgpt_login` | Credential-local `CODEX_HOME/auth.json` |
+| Gemini CLI | `google` / `api_key` | `GEMINI_API_KEY` |
+
+For Codex, choose either an OpenAI API key or **ChatGPT / Codex account login**. These are distinct official Codex authentication methods: account login does not create an API key. Trinity starts `codex login --device-auth` in a dedicated credential volume, shows the official login URL, and mounts its refreshable `auth.json` only into the assigned Codex agent. Never provide ChatGPT passwords, browser cookies, or undocumented session data.
+
+The account-auth volume is writable so Codex can refresh its token. It is intentionally limited to one agent at a time; create another credential for concurrent agents rather than sharing one `auth.json`.
 
 ### Encryption Requirement
 
@@ -58,7 +72,7 @@ Share Claude Max/Pro subscription tokens across multiple agents, with automatic 
 
 - Requires `CREDENTIAL_ENCRYPTION_KEY` in `.env`. Without it, subscription features are unavailable.
 - Auto-switch depends on failure detection. If an agent does not surface 429 or auth-class errors through standard logging, auto-switch will not trigger.
-- Hot-reload applies the new token to the **next** Claude subprocess; turns already in flight finish on the previous token. On older agent base images that lack the hot-reload endpoint, the switch falls back to recreating the container (which drops in-flight executions).
+- Claude OAuth token rotation hot-reloads the next Claude subprocess; turns already in flight finish on the previous token. Other runtime credential changes recreate the agent container before use.
 - Round-robin assignment considers only agent count, not agent activity or usage volume.
 
 ## See Also

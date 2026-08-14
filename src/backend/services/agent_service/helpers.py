@@ -39,6 +39,33 @@ DEFAULT_BASE_IMAGE_ALLOWLIST = [
 # (lifecycle recreate) apply ONLY to the Claude Code runtime. Gemini and Codex
 # bring their own credentials via .env (CRED-002).
 CLAUDE_RUNTIME_NAMES = frozenset({"claude-code", "claude"})
+RUNTIME_CREDENTIAL_PROVIDERS = {
+    "claude-code": "anthropic",
+    "claude": "anthropic",
+    "codex": "openai",
+    "gemini-cli": "google",
+    "gemini": "google",
+}
+
+
+def get_runtime_credential_provider(runtime: Optional[str]) -> Optional[str]:
+    """Return the provider compatible with a runtime, without a Claude fallback."""
+    normalized = (runtime or "claude-code").strip().lower()
+    return RUNTIME_CREDENTIAL_PROVIDERS.get(normalized)
+
+
+def credential_env_var(provider: str, auth_type: str) -> Optional[str]:
+    """Map a supported encrypted credential to its official CLI environment."""
+    return {
+        ("anthropic", "claude_oauth"): "CLAUDE_CODE_OAUTH_TOKEN",
+        ("openai", "api_key"): "OPENAI_API_KEY",
+        ("google", "api_key"): "GEMINI_API_KEY",
+    }.get((provider, auth_type))
+
+
+def is_codex_chatgpt_login(provider: str, auth_type: str) -> bool:
+    """Whether a credential is the official persisted Codex account login."""
+    return provider == "openai" and auth_type == "codex_chatgpt_login"
 
 
 def is_claude_runtime(runtime: Optional[str]) -> bool:
@@ -475,28 +502,34 @@ def check_api_key_env_matches(container, agent_name: str) -> bool:
     Check if container's auth env vars match the current setting.
     Returns True if env matches config, False if recreation needed.
 
-    SUB-002: When a subscription is assigned, CLAUDE_CODE_OAUTH_TOKEN must be
-    present with the correct value, and ANTHROPIC_API_KEY must be absent.
+    A stored credential must match the agent runtime's provider and the correct
+    official CLI environment variable.  Legacy rows remain Claude OAuth.
     """
     # Get current env vars from container
     env_list = container.attrs.get("Config", {}).get("Env", [])
     env_dict = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in env_list if "=" in e}
 
-    has_api_key = "ANTHROPIC_API_KEY" in env_dict and env_dict["ANTHROPIC_API_KEY"]
-    has_oauth_token = "CLAUDE_CODE_OAUTH_TOKEN" in env_dict and env_dict["CLAUDE_CODE_OAUTH_TOKEN"]
-
-    # Subscription takes priority — if assigned, must have token and NOT have API key
+    runtime = env_dict.get("AGENT_RUNTIME", "claude-code")
+    provider = get_runtime_credential_provider(runtime)
     subscription_id = db.get_agent_subscription_id(agent_name)
     if subscription_id is not None:
-        if has_api_key:
+        credential = db.get_subscription(subscription_id)
+        if not credential or credential.provider != provider:
             return False
-        if not has_oauth_token:
+        env_name = credential_env_var(credential.provider, credential.auth_type)
+        if not env_name:
             return False
-        # Verify token value matches DB
         expected_token = db.get_subscription_token(subscription_id)
-        if expected_token and env_dict.get("CLAUDE_CODE_OAUTH_TOKEN") != expected_token:
+        if not expected_token or env_dict.get(env_name) != expected_token:
+            return False
+        if credential.provider == "anthropic" and env_dict.get("ANTHROPIC_API_KEY"):
             return False
         return True
+
+    has_api_key = bool(env_dict.get("ANTHROPIC_API_KEY"))
+    has_oauth_token = bool(env_dict.get("CLAUDE_CODE_OAUTH_TOKEN"))
+    if provider != "anthropic":
+        return not has_api_key and not has_oauth_token
 
     use_platform_key = db.get_use_platform_api_key(agent_name)
     if use_platform_key:

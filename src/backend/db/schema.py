@@ -57,6 +57,8 @@ TABLES = {
             id TEXT PRIMARY KEY,
             name TEXT UNIQUE NOT NULL,
             encrypted_credentials TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'anthropic',
+            auth_type TEXT NOT NULL DEFAULT 'claude_oauth',
             subscription_type TEXT,
             rate_limit_tier TEXT,
             owner_id INTEGER NOT NULL,

@@ -62,6 +62,8 @@ subscription_credentials = Table(
     Column("id", Text, primary_key=True),
     Column("name", Text),
     Column("encrypted_credentials", Text),
+    Column("provider", Text),
+    Column("auth_type", Text),
     Column("subscription_type", Text),
     Column("rate_limit_tier", Text),
     Column("owner_id", Integer),

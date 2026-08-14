@@ -485,6 +485,8 @@ def _migrate_subscription_credentials_table(cursor, conn):
             id TEXT PRIMARY KEY,
             name TEXT UNIQUE NOT NULL,
             encrypted_credentials TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'anthropic',
+            auth_type TEXT NOT NULL DEFAULT 'claude_oauth',
             subscription_type TEXT,
             rate_limit_tier TEXT,
             owner_id INTEGER NOT NULL,
@@ -495,6 +497,25 @@ def _migrate_subscription_credentials_table(cursor, conn):
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_name ON subscription_credentials(name)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_owner ON subscription_credentials(owner_id)")
+    conn.commit()
+
+
+def _migrate_subscription_credential_provider_metadata(cursor, conn):
+    """Add provider/auth metadata without changing existing Claude OAuth rows."""
+    _safe_add_column(
+        cursor,
+        "subscription_credentials",
+        "provider",
+        "ALTER TABLE subscription_credentials ADD COLUMN provider TEXT NOT NULL DEFAULT 'anthropic'",
+        log_msg="Adding provider to subscription_credentials...",
+    )
+    _safe_add_column(
+        cursor,
+        "subscription_credentials",
+        "auth_type",
+        "ALTER TABLE subscription_credentials ADD COLUMN auth_type TEXT NOT NULL DEFAULT 'claude_oauth'",
+        log_msg="Adding auth_type to subscription_credentials...",
+    )
     conn.commit()
 
 
@@ -3463,6 +3484,7 @@ MIGRATIONS = [
     ("execution_origin_tracking", _migrate_execution_origin_tracking),
     ("execution_session_tracking", _migrate_execution_session_tracking),
     ("subscription_credentials", _migrate_subscription_credentials_table),
+    ("subscription_credential_provider_metadata", _migrate_subscription_credential_provider_metadata),
     ("agent_ownership_subscription_id", _migrate_agent_ownership_subscription_id),
     ("agent_dashboard_values", _migrate_agent_dashboard_values_table),
     ("setup_completed_backfill", _migrate_setup_completed_backfill),

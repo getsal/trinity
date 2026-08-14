@@ -1140,12 +1140,12 @@
             </div>
           </div>
 
-          <!-- Claude Subscriptions Section (SUB-001) -->
+          <!-- Runtime Credentials -->
           <div v-if="activeTab === 'integrations'" class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 class="text-lg font-medium text-gray-900 dark:text-white">Claude Subscriptions</h2>
+              <h2 class="text-lg font-medium text-gray-900 dark:text-white">Runtime Credentials</h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Manage Claude Max/Pro subscription credentials. Register once, assign to multiple agents.
+                Register encrypted credentials for Claude Code, OpenAI Codex, or Gemini CLI. Credentials are assigned only to compatible runtimes.
               </p>
             </div>
 
@@ -1169,9 +1169,9 @@
                   </div>
                 </div>
 
-                <!-- Add Subscription Form -->
+                <!-- Add Runtime Credential Form -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add Subscription</h3>
+                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add Credential</h3>
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- Name Input -->
@@ -1189,10 +1189,42 @@
                       />
                     </div>
 
-                    <!-- Type Input -->
+                    <!-- Provider Input -->
                     <div>
+                      <label for="credential-provider" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        Provider
+                      </label>
+                      <select
+                        id="credential-provider"
+                        v-model="newSubscription.provider"
+                        class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-action-primary-500 focus:border-action-primary-500 dark:bg-gray-700 dark:text-white text-sm"
+                        :disabled="addingSubscription"
+                      >
+                        <option value="anthropic">Anthropic / Claude Code</option>
+                        <option value="openai">OpenAI / Codex</option>
+                        <option value="google">Google / Gemini</option>
+                      </select>
+                    </div>
+
+                    <div v-if="newSubscription.provider === 'openai'">
+                      <label for="openai-auth-type" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        Authentication
+                      </label>
+                      <select
+                        id="openai-auth-type"
+                        v-model="newSubscription.auth_type"
+                        class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-action-primary-500 focus:border-action-primary-500 dark:bg-gray-700 dark:text-white text-sm"
+                        :disabled="addingSubscription"
+                      >
+                        <option value="api_key">OpenAI API key</option>
+                        <option value="codex_chatgpt_login">ChatGPT / Codex account login</option>
+                      </select>
+                    </div>
+
+                    <!-- Claude plan remains optional metadata for legacy OAuth credentials. -->
+                    <div v-if="newSubscription.provider === 'anthropic'">
                       <label for="subscription-type" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                        Type
+                        Plan
                       </label>
                       <select
                         id="subscription-type"
@@ -1208,24 +1240,30 @@
                   </div>
 
                   <!-- Token Input (SUB-002) -->
-                  <div class="mt-4">
+                  <div v-if="newSubscription.auth_type !== 'codex_chatgpt_login'" class="mt-4">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Token (from <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">claude setup-token</code>)
+                      {{ credentialValueLabel }}
                     </label>
                     <input
                       type="password"
                       v-model="newSubscription.token"
-                      placeholder="sk-ant-oat01-..."
+                      :placeholder="credentialValuePlaceholder"
                       :disabled="addingSubscription"
                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-action-primary-500 focus:border-action-primary-500"
-                      :class="{ 'border-status-danger-400 dark:border-status-danger-500': newSubscription.token && !newSubscription.token.startsWith('sk-ant-oat01-') }"
+                      :class="{ 'border-status-danger-400 dark:border-status-danger-500': newSubscription.token && !isNewCredentialValid }"
                     />
-                    <p v-if="newSubscription.token && !newSubscription.token.startsWith('sk-ant-oat01-')" class="mt-1 text-xs text-status-danger-500">
-                      Token must start with sk-ant-oat01-
+                    <p v-if="newSubscription.token && !isNewCredentialValid" class="mt-1 text-xs text-status-danger-500">
+                      {{ credentialValidationMessage }}
                     </p>
                     <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      Run <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">claude setup-token</code> locally to generate a long-lived token (~1 year)
+                      {{ credentialValueHelp }}
                     </p>
+                  </div>
+
+                  <div v-else class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    Trinity opens the official Codex device-login flow in a dedicated credential store. No API key, password, or browser cookie is requested.
+                    <a v-if="codexLoginUrl" :href="codexLoginUrl" target="_blank" rel="noopener" class="ml-1 text-action-primary-600 hover:underline">Open official login</a>
+                    <span v-else-if="codexLoginStatus" class="ml-1">{{ codexLoginStatus }}</span>
                   </div>
 
                   <!-- Add Button -->
@@ -1239,14 +1277,14 @@
                     </button>
                     <button
                       @click="addSubscription"
-                      :disabled="!newSubscription.name || !newSubscription.token.startsWith('sk-ant-oat01-') || addingSubscription || !encryptionConfigured"
+                      :disabled="!newSubscription.name || !isNewCredentialValid || addingSubscription || !encryptionConfigured"
                       class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-action-primary-600 hover:bg-action-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg v-if="addingSubscription" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Register Subscription
+                      {{ newSubscription.auth_type === 'codex_chatgpt_login' ? 'Start Official Login' : 'Register Credential' }}
                     </button>
                   </div>
                 </div>
@@ -2887,10 +2925,53 @@ const addingSubscription = ref(false)
 const deletingSubscription = ref(null)
 const expandedSubscriptions = ref(new Set())
 const encryptionConfigured = ref(true)
+const codexLoginUrl = ref('')
+const codexLoginStatus = ref('')
 const newSubscription = ref({
   name: '',
   type: 'max',
-  token: ''
+  token: '',
+  provider: 'anthropic',
+  auth_type: 'claude_oauth'
+})
+
+const isNewCredentialValid = computed(() => {
+  if (newSubscription.value.auth_type === 'codex_chatgpt_login') return Boolean(newSubscription.value.name.trim())
+  const token = newSubscription.value.token.trim()
+  if (!token) return false
+  if (newSubscription.value.provider === 'anthropic') return token.startsWith('sk-ant-oat01-')
+  if (newSubscription.value.provider === 'openai') return token.startsWith('sk-')
+  return true
+})
+
+const credentialValueLabel = computed(() => {
+  if (newSubscription.value.provider === 'anthropic') return 'Token (from claude setup-token)'
+  if (newSubscription.value.provider === 'openai') return 'OpenAI API key'
+  return 'Gemini API key'
+})
+
+const credentialValuePlaceholder = computed(() => {
+  if (newSubscription.value.provider === 'anthropic') return 'sk-ant-oat01-...'
+  if (newSubscription.value.provider === 'openai') return 'sk-...'
+  return 'Gemini API key'
+})
+
+const credentialValidationMessage = computed(() => {
+  if (newSubscription.value.provider === 'anthropic') return 'Token must start with sk-ant-oat01-'
+  if (newSubscription.value.provider === 'openai') return 'OpenAI API key must start with sk-'
+  return 'A Gemini API key is required'
+})
+
+const credentialValueHelp = computed(() => {
+  if (newSubscription.value.provider === 'anthropic') return 'Run claude setup-token locally to generate an official Claude Code OAuth token.'
+  if (newSubscription.value.provider === 'openai') return 'Use an OpenAI API key. ChatGPT/Codex account login is a separate official CLI flow; it does not create an API key.'
+  return 'Use an API key issued for Gemini. Google account sessions and browser cookies are not accepted.'
+})
+
+watch(() => newSubscription.value.provider, (provider) => {
+  newSubscription.value.auth_type = provider === 'anthropic' ? 'claude_oauth' : 'api_key'
+  codexLoginUrl.value = ''
+  codexLoginStatus.value = ''
 })
 
 // Agent assignment state (for subscription expanded rows)
@@ -3989,12 +4070,21 @@ function clearNewSubscription() {
   newSubscription.value = {
     name: '',
     type: 'max',
-    token: ''
+    token: '',
+    provider: 'anthropic',
+    auth_type: 'claude_oauth'
   }
+  codexLoginUrl.value = ''
+  codexLoginStatus.value = ''
 }
 
 async function addSubscription() {
-  if (!newSubscription.value.name || !newSubscription.value.token.startsWith('sk-ant-oat01-')) return
+  if (!newSubscription.value.name || !isNewCredentialValid.value) return
+
+  if (newSubscription.value.auth_type === 'codex_chatgpt_login') {
+    await startCodexChatGPTLogin()
+    return
+  }
 
   addingSubscription.value = true
   error.value = null
@@ -4003,7 +4093,9 @@ async function addSubscription() {
     await axios.post('/api/subscriptions', {
       name: newSubscription.value.name,
       token: newSubscription.value.token,
-      subscription_type: newSubscription.value.type || null
+      provider: newSubscription.value.provider,
+      auth_type: newSubscription.value.auth_type,
+      subscription_type: newSubscription.value.provider === 'anthropic' ? newSubscription.value.type || null : null
     }, {
       headers: authStore.authHeader
     })
@@ -4018,6 +4110,29 @@ async function addSubscription() {
     }, 3000)
   } catch (e) {
     error.value = e.response?.data?.detail || 'Failed to register subscription'
+  } finally {
+    addingSubscription.value = false
+  }
+}
+
+async function startCodexChatGPTLogin() {
+  addingSubscription.value = true
+  error.value = null
+  codexLoginUrl.value = ''
+  codexLoginStatus.value = 'Starting official Codex login…'
+  try {
+    const created = await axios.post('/api/subscriptions/codex-chatgpt-login', {
+      name: newSubscription.value.name
+    }, { headers: authStore.authHeader })
+    const status = await axios.get(`/api/subscriptions/codex-chatgpt-login/${created.data.id}`, {
+      headers: authStore.authHeader
+    })
+    codexLoginUrl.value = status.data.login_url || ''
+    codexLoginStatus.value = status.data.connected ? 'Connected' : (status.data.status || 'Pending')
+    await loadSubscriptions()
+  } catch (e) {
+    codexLoginStatus.value = ''
+    error.value = e.response?.data?.detail || 'Failed to start official Codex login'
   } finally {
     addingSubscription.value = false
   }

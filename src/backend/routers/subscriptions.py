@@ -23,6 +23,7 @@ from db_models import (
     SubscriptionUsage,
     SubscriptionWithAgents,
     AgentAuthStatus,
+    CodexChatGPTLoginStart,
 )
 
 router = APIRouter(prefix="/api/subscriptions", tags=["subscriptions"])
@@ -49,13 +50,14 @@ async def register_subscription(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Register a new subscription token.
+    Register a new encrypted runtime credential.
 
     Admin-only. Takes a long-lived token from `claude setup-token` and
     encrypts it for storage. Use upsert semantics - if a subscription with
     the same name exists, it will be updated.
 
-    Token must start with `sk-ant-oat01-` (Claude Code OAuth access token).
+    Legacy requests remain Anthropic Claude Code OAuth credentials. Supported
+    provider/auth types are validated by ``SubscriptionCredentialCreate``.
     """
     assert_admin(current_user)
 
@@ -78,6 +80,8 @@ async def register_subscription(
             name=request.name,
             token=request.token,
             owner_id=user["id"],
+            provider=request.provider,
+            auth_type=request.auth_type,
             subscription_type=request.subscription_type,
             rate_limit_tier=request.rate_limit_tier,
         )
@@ -107,6 +111,45 @@ async def register_subscription(
     except Exception as e:
         logger.error(f"Failed to register subscription: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to register subscription: {str(e)}")
+
+
+@router.post("/codex-chatgpt-login", response_model=SubscriptionCredential)
+async def start_codex_chatgpt_login(
+    request: CodexChatGPTLoginStart,
+    current_user: User = Depends(get_current_user),
+):
+    """Start the official Codex device login in a credential-local volume."""
+    assert_admin(current_user)
+    if not os.getenv("CREDENTIAL_ENCRYPTION_KEY"):
+        raise HTTPException(status_code=503, detail="CREDENTIAL_ENCRYPTION_KEY is required for credential storage")
+    user = db.get_user_by_username(current_user.username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    credential = db.create_subscription(
+        name=request.name,
+        # A non-secret marker preserves the existing encrypted-credential table
+        # contract. The refreshable secret remains solely in the Docker volume.
+        token="codex_chatgpt_login_volume",
+        owner_id=user["id"],
+        provider="openai",
+        auth_type="codex_chatgpt_login",
+        subscription_type=request.subscription_type,
+        rate_limit_tier=request.rate_limit_tier,
+    )
+    from services.codex_auth_service import start_login
+    await start_login(credential.id)
+    logger.info("Started official Codex login for credential %s", credential.name)
+    return credential
+
+
+@router.get("/codex-chatgpt-login/{subscription_id}")
+async def get_codex_chatgpt_login_status(
+    subscription_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    assert_admin(current_user)
+    from services.codex_auth_service import login_status
+    return await login_status(subscription_id)
 
 
 @router.get("", response_model=List[SubscriptionWithAgents])
@@ -228,6 +271,9 @@ async def delete_subscription(
     deleted = db.delete_subscription(subscription.id)
 
     if deleted:
+        if subscription.provider == "openai" and subscription.auth_type == "codex_chatgpt_login":
+            from services.codex_auth_service import delete_auth_volume
+            await delete_auth_volume(subscription.id)
         logger.info(
             f"Deleted subscription '{subscription.name}' by {current_user.username}, "
             f"cleared {len(affected_agents)} agent assignments"
@@ -272,6 +318,33 @@ async def assign_subscription_to_agent(
     if not subscription:
         raise HTTPException(status_code=404, detail=f"Subscription '{subscription_name}' not found")
 
+    # A credential can only be assigned to its matching runtime.  Runtime is
+    # stored on the container label; container-less legacy agents retain the
+    # Claude default until they are started/recreated.
+    from services.docker_service import get_agent_runtime
+    from services.agent_service.helpers import get_runtime_credential_provider
+    runtime = get_agent_runtime(agent_name)
+    expected_provider = get_runtime_credential_provider(runtime)
+    if expected_provider and subscription.provider != expected_provider:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Credential provider '{subscription.provider}' is incompatible "
+                f"with agent runtime '{runtime}'"
+            ),
+        )
+    if subscription.auth_type == "codex_chatgpt_login":
+        from services.codex_auth_service import login_status
+        login = await login_status(subscription.id)
+        if not login["connected"]:
+            raise HTTPException(status_code=409, detail="Complete the official Codex login before assigning this credential")
+        assigned = db.get_agents_by_subscription(subscription.id)
+        if assigned and agent_name not in assigned:
+            raise HTTPException(
+                status_code=409,
+                detail="A ChatGPT/Codex login may be attached to only one agent. Create a separate credential to run agents concurrently.",
+            )
+
     try:
         from services.subscription_auto_switch import (
             agent_switch_lock,
@@ -298,7 +371,20 @@ async def assign_subscription_to_agent(
             restart_result = None
             injection_result = None
 
-            if old_sub_id is not None:
+            if subscription.auth_type == "codex_chatgpt_login":
+                # This auth method adds a credential-local volume, so even a
+                # sub→sub transition needs a full recreate rather than token
+                # hot reload.
+                from services.docker_service import get_agent_container, get_agent_status_from_container
+                from services.agent_service.lifecycle import recreate_container_with_updated_config
+                container = get_agent_container(agent_name)
+                if container and get_agent_status_from_container(container).status == "running":
+                    await recreate_container_with_updated_config(agent_name, container, current_user.username)
+                    restart_result = "success"
+                    injection_result = {"status": "success"}
+                else:
+                    injection_result = {"status": "agent_not_running"}
+            elif old_sub_id is not None:
                 # sub → sub: hot-reload the token without recreating the container.
                 # The helper itself short-circuits ("not_running"/"no_container")
                 # for stopped agents and falls back to a recreate on 404 / transport

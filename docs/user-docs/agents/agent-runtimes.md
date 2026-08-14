@@ -18,7 +18,7 @@ runtime:
   model: gpt-5.1-codex # optional model override
 ```
 
-The runtime is fixed when the agent is created. To change it, recreate the agent from a template that declares a different runtime — there is no post-creation switch.
+The runtime is fixed when the agent is created. Choose it in the creation dialog or declare it in `template.yaml`. To change it later, recreate the agent.
 
 On the Agent Detail page, a runtime badge shows which runtime the agent is using. Chat works the same across all runtimes. For Codex agents, the **Session** tab is hidden (Codex does not support session resume); the **Chat** tab remains, with full conversation continuity.
 
@@ -26,7 +26,7 @@ On the Agent Detail page, a runtime badge shows which runtime the agent is using
 
 | | Claude Code (default) | Gemini CLI | OpenAI Codex |
 |---|---|---|---|
-| Auth model | Claude subscription / OAuth, or platform API key | Gemini API key | `OPENAI_API_KEY` (Codex skips Claude-subscription auto-assign) |
+| Auth model | Anthropic OAuth, or platform API key | Google API key | OpenAI API key, or official ChatGPT/Codex CLI account login |
 | System-prompt file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` |
 | Chat continuity | Yes | Yes | Yes |
 | Session tab resume | Yes | Yes | No (Session tab hidden) |
@@ -62,5 +62,5 @@ There is no API or MCP endpoint to switch an agent's runtime after creation. See
 - [Creating Agents](creating-agents.md) -- Selecting a runtime via the template
 - [Session Tab](agent-session.md) -- Resume-based chat (Claude/Gemini only)
 - [Chat](agent-chat.md) -- Standard chat, available on all runtimes
-- [Subscription Credentials](../credentials/subscription-credentials.md) -- Claude-subscription auto-assignment (skipped for Codex)
+- [Runtime Credentials](../credentials/subscription-credentials.md) -- provider-compatible credential assignment
 - [MCP Server](../integrations/mcp-server.md) -- Tools available to all runtimes
