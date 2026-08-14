@@ -9,6 +9,7 @@ services:
     environment:
       DOCKER_HOST: unix:///run/docker-trinity.sock
       TRINITY_AGENT_NETWORK: trinity-acceptance-agent-network
+      TRINITY_SKIP_SYSTEM_AGENT: "true"
     volumes:
       - /run/docker-trinity.sock:/run/docker-trinity.sock:ro
   frontend:

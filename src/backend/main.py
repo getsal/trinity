@@ -408,15 +408,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Error checking agents: {e}")
 
-        # Auto-deploy system agent (Phase 11.1)
-        try:
-            result = await system_agent_service.ensure_deployed()
-            logger.info(f"System agent: {result['action']} - {result['message']}")
-            if result.get('status') == 'error':
-                logger.warning(f"  Warning: System agent deployment issue - {result.get('message')}")
-        except Exception as e:
-            logger.error(f"Error deploying system agent: {e}")
-            # Don't fail startup - system agent is important but not critical for platform operation
+        # Isolated acceptance stacks must not inspect or create the fixed-name
+        # system agent on another Trinity project sharing the same daemon.
+        if os.getenv("TRINITY_SKIP_SYSTEM_AGENT", "").lower() in {"1", "true", "yes"}:
+            logger.info("System-agent deployment disabled for this isolated stack")
+        else:
+            # Auto-deploy system agent (Phase 11.1)
+            try:
+                result = await system_agent_service.ensure_deployed()
+                logger.info(f"System agent: {result['action']} - {result['message']}")
+                if result.get('status') == 'error':
+                    logger.warning(f"  Warning: System agent deployment issue - {result.get('message')}")
+            except Exception as e:
+                logger.error(f"Error deploying system agent: {e}")
+                # Don't fail startup - system agent is important but not critical for platform operation
 
         # First-run seeding on a fresh install: Cornelius (ent#107) + the default
         # system manifest (trinity-enterprise#124), sequenced under ONE persisted
