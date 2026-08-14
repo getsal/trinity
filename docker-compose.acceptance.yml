@@ -27,3 +27,7 @@ services:
     ports: !reset ["127.0.0.1:14317:4317", "127.0.0.1:14318:4318", "127.0.0.1:18889:8889", "127.0.0.1:13134:13133"]
   postgres:
     container_name: trinity-acceptance-postgres
+
+networks:
+  trinity-platform-network:
+    name: trinity-acceptance-platform-network
