@@ -114,6 +114,7 @@ TABLES = {
             spawned_by_key_id TEXT,
             volume_base_name TEXT,
             display_label TEXT,
+            runtime TEXT DEFAULT 'claude-code',
             FOREIGN KEY (owner_id) REFERENCES users(id),
             FOREIGN KEY (subscription_id) REFERENCES subscription_credentials(id)
         )

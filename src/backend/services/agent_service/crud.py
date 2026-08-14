@@ -2063,6 +2063,7 @@ def _register_agent(
         ephemeral_expires_at=ephemeral_expires_at,
         spawned_by_agent=current_user.agent_name,
         spawned_by_key_id=spawned_by_key_id,
+        runtime=config.runtime or "claude-code",
         # Ghosts default to 1 concurrent turn: bounds check-then-act
         # budget overshoot to a single in-flight execution and shrinks
         # the blast radius of an untrusted workspace.

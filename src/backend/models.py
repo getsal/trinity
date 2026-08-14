@@ -288,6 +288,15 @@ class AgentLabelUpdate(BaseModel):
         return normalize_display_label(v)
 
 
+class AgentRuntimeMigrationRequest(BaseModel):
+    """Deliberate runtime replacement request for an existing agent."""
+
+    runtime: str
+    # Optional destination credential. The assignment is committed only after
+    # the replacement container passes its readiness check.
+    credential_id: Optional[str] = None
+
+
 class AgentStatus(BaseModel):
     """Status of an agent container. (#2104: no `type` — the taxonomy is retired.)"""
     name: str

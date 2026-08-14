@@ -646,6 +646,12 @@ class DatabaseManager:
         # spawned_by_agent, spawned_by_key_id, max_parallel_tasks).
         return self._agent_ops.register_agent_owner(agent_name, owner_username, is_system, require_email, **kwargs)
 
+    def get_agent_runtime(self, agent_name: str):
+        return self._agent_ops.get_agent_runtime(agent_name)
+
+    def set_agent_runtime(self, agent_name: str, runtime: str):
+        return self._agent_ops.set_agent_runtime(agent_name, runtime)
+
     # --- Ephemeral "ghost" agents (trinity-enterprise#69) ---
 
     def get_agent_ephemeral_info(self, agent_name: str):

@@ -118,6 +118,7 @@ agent_ownership = Table(
     Column("spawned_by_key_id", Text),             # trinity-enterprise#69 Part 2: parent MCP key id (stable identity)
     Column("volume_base_name", Text),              # #1664: data-volume identity (NULL = agent_name); frozen at rename
     Column("display_label", Text),                 # ent#181: human-facing name (NULL = render agent_name); slug never moves
+    Column("runtime", Text),                       # requested runtime; survives container recreation
 )
 
 agent_sharing = Table(

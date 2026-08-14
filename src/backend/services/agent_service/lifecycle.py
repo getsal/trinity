@@ -42,6 +42,7 @@ from .helpers import (
     is_system_agent_name,
     credential_env_var,
     get_runtime_credential_provider,
+    validate_runtime,
 )
 from services.agent_auth import derive_agent_token
 from utils.helpers import utc_now_iso
@@ -802,6 +803,8 @@ async def recreate_container_with_updated_config(
     env_overrides: Optional[dict] = None,
     require_running: bool = True,
     preserve_run_state: bool = False,
+    runtime_override: Optional[str] = None,
+    subscription_id_override: Optional[str] = None,
 ):
     """
     Recreate an agent container with updated configuration.
@@ -884,7 +887,14 @@ async def recreate_container_with_updated_config(
     # SEC-172: Validate image on container recreation (defense in depth)
     validate_base_image(image)
     env_vars = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in old_config.get("Env", []) if "=" in e}
-    labels = old_config.get("Labels", {})
+    labels = dict(old_config.get("Labels", {}))
+
+    # A runtime migration changes only the runtime/container layer. The old
+    # container's mounts, workspace and labels are retained below.
+    if runtime_override:
+        validate_runtime(runtime_override)
+        env_vars['AGENT_RUNTIME'] = runtime_override.lower()
+        labels['trinity.agent-runtime'] = runtime_override.lower()
 
     # #1098: redirect scratch (pip/npm/build) off the 100 MB noexec /tmp tmpfs
     # onto the disk-backed home volume. setdefault so a template/user-set TMPDIR
@@ -901,7 +911,11 @@ async def recreate_container_with_updated_config(
     )
     _provider = get_runtime_credential_provider(_runtime)
     _is_claude_runtime = is_claude_runtime(_runtime)
-    subscription_id = db.get_agent_subscription_id(agent_name)
+    subscription_id = (
+        subscription_id_override
+        if subscription_id_override is not None
+        else db.get_agent_subscription_id(agent_name)
+    )
     has_subscription = subscription_id is not None
     use_platform_key = db.get_use_platform_api_key(agent_name)
 
@@ -1136,9 +1150,22 @@ async def recreate_container_with_updated_config(
                 volumes[vol_name] = {"bind": dest, "mode": "rw" if m.get("RW", True) else "ro"}
 
     from services.codex_auth_service import add_auth_mount
-    await add_auth_mount(
-        db.get_agent_subscription_id(agent_name), _runtime, volumes, env_vars
-    )
+    await add_auth_mount(subscription_id, _runtime, volumes, env_vars)
+
+    # Every validation that can reject the replacement (notably the exclusive
+    # Codex account-login mount) has now completed.  Do not remove the live
+    # container before this point: a rejected configuration change must leave
+    # the running agent and its workspace untouched.
+    try:
+        await container_stop(old_container)
+    except Exception:
+        pass
+    try:
+        await container_remove(old_container)
+    except docker.errors.NotFound:
+        # A failed replacement can leave no named container.  The immutable
+        # snapshot passed here is still sufficient to recreate the original.
+        pass
 
     # #1854: caller-forced env, applied LAST so it wins over every derived rule
     # above (see the `env_overrides` note in this function's docstring). Keys are
@@ -1205,6 +1232,101 @@ async def _restore_stopped_state(agent_name, container, preserve_run_state, was_
             "(preserve_run_state): %s. The agent is running.",
             agent_name, e,
         )
+
+
+async def migrate_agent_runtime(
+    agent_name: str,
+    target_runtime: str,
+    owner_username: str,
+    *,
+    target_subscription_id: Optional[str] = None,
+) -> dict:
+    """Switch one agent's runtime with a readiness gate and best-effort rollback.
+
+    The workspace is retained because recreation reuses the current container's
+    named mounts. Runtime metadata is written only after the new container is
+    healthy. A supplied destination credential is validated before the old
+    container is touched; its assignment is committed only after success.
+    """
+    validate_runtime(target_runtime)
+    target_runtime = target_runtime.lower()
+    old_container = get_agent_container(agent_name)
+    if not old_container:
+        raise HTTPException(status_code=404, detail="Agent container not found")
+
+    old_config = old_container.attrs.get("Config", {})
+    old_labels = old_config.get("Labels", {}) or {}
+    old_env = {
+        item.split("=", 1)[0]: item.split("=", 1)[1]
+        for item in old_config.get("Env", [])
+        if "=" in item
+    }
+    old_runtime = (
+        old_env.get("AGENT_RUNTIME")
+        or old_labels.get("trinity.agent-runtime")
+        or db.get_agent_runtime(agent_name)
+        or "claude-code"
+    ).lower()
+    old_subscription_id = db.get_agent_subscription_id(agent_name)
+    effective_subscription_id = (
+        target_subscription_id
+        if target_subscription_id is not None
+        else old_subscription_id
+    )
+
+    if effective_subscription_id:
+        credential = db.get_subscription(effective_subscription_id)
+        if not credential:
+            raise HTTPException(status_code=404, detail="Destination credential not found")
+        expected_provider = get_runtime_credential_provider(target_runtime)
+        if getattr(credential, "provider", None) != expected_provider:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Credential provider {getattr(credential, 'provider', None)!r} "
+                    f"is incompatible with runtime {target_runtime!r}."
+                ),
+            )
+
+    try:
+        replacement = await recreate_container_with_updated_config(
+            agent_name,
+            old_container,
+            owner_username,
+            runtime_override=target_runtime,
+            subscription_id_override=effective_subscription_id,
+        )
+        if not await wait_for_agent_ready(agent_name):
+            raise RuntimeError("Replacement container did not become ready")
+    except Exception as migration_error:
+        logger.exception("Runtime migration failed for %s; restoring original runtime", agent_name)
+        rollback_source = get_agent_container(agent_name) or old_container
+        try:
+            await recreate_container_with_updated_config(
+                agent_name,
+                rollback_source,
+                owner_username,
+                runtime_override=old_runtime,
+                subscription_id_override=old_subscription_id,
+            )
+            rollback_ok = await wait_for_agent_ready(agent_name)
+        except Exception:
+            logger.exception("Runtime rollback failed for %s", agent_name)
+            rollback_ok = False
+        detail = "Runtime migration failed; original container restored." if rollback_ok else (
+            "Runtime migration and automatic rollback failed; operator action required."
+        )
+        raise HTTPException(status_code=500, detail=detail) from migration_error
+
+    if target_subscription_id is not None and target_subscription_id != old_subscription_id:
+        db.assign_subscription_to_agent(agent_name, target_subscription_id)
+    db.set_agent_runtime(agent_name, target_runtime)
+    return {
+        "agent_name": agent_name,
+        "previous_runtime": old_runtime,
+        "runtime": target_runtime,
+        "rolled_back": False,
+    }
 
 
 async def _provision_folders_and_run_agent_container(
@@ -1507,7 +1629,11 @@ async def recreate_missing_container(agent_name: str):
     tmpl = await _read_template_yaml_from_volume(agent_name)
     # #2104: template.yaml `type:` is parsed but ignored — the taxonomy is retired.
     runtime_cfg = tmpl.get("runtime", {})
-    if isinstance(runtime_cfg, dict):
+    persisted_runtime = db.get_agent_runtime(agent_name)
+    if persisted_runtime:
+        runtime = persisted_runtime.lower()
+        runtime_model = ""
+    elif isinstance(runtime_cfg, dict):
         runtime = (runtime_cfg.get("type") or "claude-code").lower()
         runtime_model = runtime_cfg.get("model") or ""
     elif isinstance(runtime_cfg, str):

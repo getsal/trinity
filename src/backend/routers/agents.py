@@ -26,6 +26,7 @@ from models import (
     ExecutionResultEnvelope,
     HeartbeatPayload,
     AgentLabelUpdate,
+    AgentRuntimeMigrationRequest,
     McpExposedUpdate,
     VoiceRepliesUpdate,
     VoiceReplyRequest,
@@ -54,6 +55,7 @@ from services.agent_service import (
     get_accessible_agents,
     # Lifecycle
     start_agent_internal,
+    migrate_agent_runtime,
     # CRUD
     create_agent_internal as _create_agent_internal,
     # Deploy
@@ -815,6 +817,26 @@ async def stop_agent_endpoint(agent_name: AuthorizedAgentByName, request: Reques
                 f"({e.__class__.__name__} — details in backend logs)"
             ),
         )
+
+
+@router.post("/{agent_name}/runtime")
+async def migrate_agent_runtime_endpoint(
+    agent_name: AuthorizedAgentByName,
+    payload: AgentRuntimeMigrationRequest,
+    current_user: CurrentUser,
+):
+    """Replace only one agent container after runtime/credential preflight.
+
+    Agent workspace volumes and metadata stay intact. The previous container is
+    automatically recreated if the target runtime does not reach readiness.
+    """
+    enforce_agent_spawn_scope(current_user, agent_name)
+    return await migrate_agent_runtime(
+        agent_name,
+        payload.runtime,
+        current_user.username,
+        target_subscription_id=payload.credential_id,
+    )
 
 
 # ============================================================================

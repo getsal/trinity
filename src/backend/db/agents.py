@@ -99,6 +99,7 @@ class AgentOperations(
         spawned_by_agent: Optional[str] = None,
         spawned_by_key_id: Optional[str] = None,
         max_parallel_tasks: Optional[int] = None,
+        runtime: str = "claude-code",
     ) -> bool:
         """Register the owner of an agent.
 
@@ -143,6 +144,7 @@ class AgentOperations(
                 is_system=1 if is_system else 0,
                 execution_timeout_seconds=3600,
                 require_email=1 if require_email else 0,
+                runtime=runtime or "claude-code",
             )
             if is_ephemeral:
                 values.update(
@@ -346,6 +348,29 @@ class AgentOperations(
                 result["is_system"] = bool(result.get("is_system", 0))
                 return result
             return None
+
+    def get_agent_runtime(self, agent_name: str) -> Optional[str]:
+        """Return the persisted requested runtime for a live agent."""
+        with get_engine().connect() as conn:
+            return conn.execute(
+                select(agent_ownership.c.runtime).where(
+                    agent_ownership.c.agent_name == agent_name,
+                    agent_ownership.c.deleted_at.is_(None),
+                )
+            ).scalar_one_or_none()
+
+    def set_agent_runtime(self, agent_name: str, runtime: str) -> bool:
+        """Persist a validated runtime selection for future recovery/recreation."""
+        with get_engine().begin() as conn:
+            result = conn.execute(
+                update(agent_ownership)
+                .where(
+                    agent_ownership.c.agent_name == agent_name,
+                    agent_ownership.c.deleted_at.is_(None),
+                )
+                .values(runtime=runtime)
+            )
+        return bool(result.rowcount)
 
     def get_agents_by_owner(self, owner_username: str) -> List[str]:
         """Get all agent names owned by a user."""

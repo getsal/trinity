@@ -18,6 +18,7 @@ from .lifecycle import (
     inject_assigned_credentials,
     start_agent_internal,
     recreate_container_with_updated_config,
+    migrate_agent_runtime,
 )
 from .crud import (
     create_agent_internal,
@@ -102,6 +103,7 @@ __all__ = [
     "inject_assigned_credentials",
     "start_agent_internal",
     "recreate_container_with_updated_config",
+    "migrate_agent_runtime",
     # CRUD
     "create_agent_internal",
     # Deploy

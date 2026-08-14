@@ -3463,6 +3463,13 @@ def _migrate_portal_chat_state(cursor, conn):
             PRIMARY KEY (client_email, chat_kind, chat_id)
         )
         """
+def _migrate_agent_ownership_runtime(cursor, conn):
+    """Persist the selected runtime so container recovery cannot fall back to Claude."""
+    _safe_add_column(
+        cursor,
+        "agent_ownership",
+        "runtime",
+        "ALTER TABLE agent_ownership ADD COLUMN runtime TEXT DEFAULT 'claude-code'",
     )
     conn.commit()
 
@@ -3486,6 +3493,7 @@ MIGRATIONS = [
     ("subscription_credentials", _migrate_subscription_credentials_table),
     ("subscription_credential_provider_metadata", _migrate_subscription_credential_provider_metadata),
     ("agent_ownership_subscription_id", _migrate_agent_ownership_subscription_id),
+    ("agent_ownership_runtime", _migrate_agent_ownership_runtime),
     ("agent_dashboard_values", _migrate_agent_dashboard_values_table),
     ("setup_completed_backfill", _migrate_setup_completed_backfill),
     ("slack_integration_tables", _migrate_slack_integration_tables),
