@@ -29,5 +29,13 @@ services:
     container_name: trinity-acceptance-postgres
 
 networks:
-  trinity-platform-network:
+  trinity-platform:
     name: trinity-acceptance-platform-network
+    ipam: !reset
+      config:
+        - subnet: 172.39.0.0/16
+  trinity-agent:
+    name: trinity-acceptance-agent-network
+    ipam: !reset
+      config:
+        - subnet: 172.38.0.0/16
