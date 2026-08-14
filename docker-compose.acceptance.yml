@@ -6,6 +6,10 @@ services:
   backend:
     container_name: trinity-acceptance-backend
     ports: !reset ["127.0.0.1:18000:8000"]
+    environment:
+      DOCKER_HOST: unix:///run/docker-trinity.sock
+    volumes:
+      - /run/docker-trinity.sock:/run/docker-trinity.sock:ro
   frontend:
     container_name: trinity-acceptance-frontend
     ports: !reset ["127.0.0.1:18080:80"]
