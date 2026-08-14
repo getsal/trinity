@@ -1,0 +1,29 @@
+# Isolated sibling stack for manual acceptance testing. It deliberately has no
+# secret values: invoke it with an operator-managed env file and a separate
+# TRINITY_DATA_PATH. Static names and host ports from docker-compose.yml are
+# replaced so the production Trinity project is never touched.
+services:
+  backend:
+    container_name: trinity-acceptance-backend
+    ports: !reset ["127.0.0.1:18000:8000"]
+  frontend:
+    container_name: trinity-acceptance-frontend
+    ports: !reset ["127.0.0.1:18080:80"]
+  redis:
+    container_name: trinity-acceptance-redis
+    ports: !reset ["127.0.0.1:16379:6379"]
+  mcp-server:
+    container_name: trinity-acceptance-mcp-server
+    ports: !reset ["127.0.0.1:18080:8080"]
+  scheduler:
+    container_name: trinity-acceptance-scheduler
+  logs-init:
+    container_name: trinity-acceptance-logs-init
+  vector:
+    container_name: trinity-acceptance-vector
+    ports: !reset ["127.0.0.1:18686:8686"]
+  otel-collector:
+    container_name: trinity-acceptance-otel-collector
+    ports: !reset ["127.0.0.1:14317:4317", "127.0.0.1:14318:4318", "127.0.0.1:18889:8889", "127.0.0.1:13134:13133"]
+  postgres:
+    container_name: trinity-acceptance-postgres
