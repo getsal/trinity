@@ -1,0 +1,31 @@
+name: seo-editorial-team
+display_name: "SEO Editorial Team"
+description: >-
+  A three-role SEO editorial team for research, Japanese SEO writing, and
+  evidence-based editorial/compliance review.
+version: "1.0.0"
+hidden: false
+resources:
+  cpu: "2"
+  memory: "4g"
+credentials: []
+git:
+  push_enabled: false
+  commit_paths:
+    - content/
+    - outputs/
+    - memory/
+  ignore_paths:
+    - .env
+    - .mcp.json
+    - "*.log"
+metrics:
+  - name: articles_completed
+    type: counter
+    description: Articles reaching PASS and final handoff.
+  - name: review_failures
+    type: counter
+    description: Reviewer FAIL decisions.
+  - name: human_escalations
+    type: counter
+    description: Runs stopped after the retry limit.

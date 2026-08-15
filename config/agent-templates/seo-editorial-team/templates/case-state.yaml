@@ -1,0 +1,7 @@
+case_id: "<case-id>"
+status: READY
+review_attempt: 0
+max_review_attempts: 3
+artifacts: []
+last_decision: null
+blockers: []
