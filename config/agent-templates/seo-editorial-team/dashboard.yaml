@@ -1,0 +1,49 @@
+title: "SEO Editorial Team"
+refresh: 30
+
+sections:
+  - title: "Production Status"
+    layout: grid
+    columns: 3
+    widgets:
+      - type: status
+        label: "Pipeline"
+        value: "Ready"
+        color: blue
+
+      - type: metric
+        label: "Articles Completed"
+        value: 0
+        unit: "articles"
+        description: "Increment after final handoff"
+
+      - type: metric
+        label: "Review Failures"
+        value: 0
+        unit: "returns"
+        description: "Writer revisions requested"
+
+  - title: "Team"
+    layout: list
+    columns: 1
+    widgets:
+      - type: list
+        title: "Pipeline roles"
+        items:
+          - "Researcher — evidence and source packet"
+          - "Writer — Japanese SEO draft"
+          - "Reviewer — quality and compliance gate"
+        style: bullet
+        max_items: 5
+
+  - title: "Workflow"
+    layout: list
+    columns: 1
+    widgets:
+      - type: markdown
+        content: "**Researcher → Writer → Reviewer**\n\nPASS completes the handoff. FAIL returns the work to Writer. After three failed review attempts, the case becomes `BLOCKED_FOR_HUMAN`."
+
+      - type: link
+        label: "Open workflow documentation"
+        url: "/files/docs/workflow.md"
+        external: false

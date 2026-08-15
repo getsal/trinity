@@ -3,6 +3,9 @@
 A Trinity-compatible, three-role SEO production team for evidence-backed
 Japanese editorial work.
 
+The template includes `dashboard.yaml` for the Trinity Agent Dashboard and
+`ARCHITECTURE.md` for the component boundaries and handoff contract.
+
 ## Roles
 
 - **Researcher**: brief analysis, search intent, keyword/SERP research, source
