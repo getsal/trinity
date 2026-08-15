@@ -3,7 +3,7 @@
 ## State machine
 
 ```text
-BRIEFED -> RESEARCHING -> RESEARCH_COMPLETE -> WRITING -> REVIEWING
+BRIEFED -> COORDINATING -> RESEARCHING -> RESEARCH_COMPLETE -> WRITING -> REVIEWING
                                                ^             |
                                                | FAIL        | PASS
                                                +-------------+--> COMPLETE
@@ -13,10 +13,15 @@ REVIEWING -- FAIL on attempt 3 --> BLOCKED_FOR_HUMAN
 
 ## Communication contract
 
-- Researcher sends `research_packet_ready` to `seo-writer`.
-- Writer sends `draft_ready` to `seo-reviewer`.
-- Reviewer sends `review_fail` to `seo-writer` with findings and attempt number.
-- Reviewer sends `blocked_for_human` to the operator after the third FAIL.
+- Coordinator sends `research_requested` to `seo-researcher`.
+- Researcher sends `research_packet_ready` to `seo-coordinator`.
+- Coordinator sends `draft_requested` to `seo-writer`.
+- Writer sends `draft_ready` to `seo-coordinator`.
+- Coordinator sends `review_requested` to `seo-reviewer`.
+- Reviewer sends `review_fail` to `seo-coordinator` with findings and attempt number.
+- Coordinator sends `revision_requested` to `seo-writer` unless the limit is reached.
+- Reviewer sends PASS or `blocked_for_human` to `seo-coordinator`.
+- Coordinator sends final handoff or human escalation to the operator.
 
 Use `chat_with_agent` for these control messages. Put large artifacts in the
 permitted shared folder; never pass an entire draft through the MCP message.

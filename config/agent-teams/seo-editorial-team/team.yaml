@@ -1,23 +1,23 @@
 manifest_version: 1
 kind: trinity-agent-team
-name: seo-editorial-team
-display_name: "SEO Editorial Team"
-description: "A permanent three-agent SEO editorial department. Members operate only within this team."
+name: seo-editorial
+display_name: "SEO Editorial"
+description: "A permanent four-agent SEO editorial department with a dedicated coordinator. Members operate only within this team."
 
 execution:
   mode: team_only
   standalone_deploy: prohibited
   standalone_tasks: prohibited
   requires_team_context: true
-  operator_entrypoint: seo-researcher
+  operator_entrypoint: seo-coordinator
 
 organization:
   model: fixed_department
   manager: operator
   shared_mission: "Produce evidence-backed Japanese SEO content with an independent review gate."
-  member_count: 3
-  department_name: seo-editorial-team
-  department_tag: dept-seo-editorial-team
+  member_count: 4
+  department_name: seo-editorial
+  department_tag: dept-seo-editorial
   dashboard_view: department_grid
 
 policies:
@@ -30,41 +30,55 @@ policies:
   preserve_research_evidence: true
 
 members:
+  - name: seo-coordinator
+    role: coordinator
+    template: ../../agent-templates/seo-coordinator
+    employment: permanent
+    mission: "Route briefs, track case state, and coordinate the editorial workflow."
+    reports_to: operator
+    tags: [dept-seo-editorial]
+    exposes_shared_folder: true
+    consumes_shared_folder_from: [seo-researcher, seo-writer, seo-reviewer]
+    may_call: [seo-researcher, seo-writer, seo-reviewer]
+    may_approve: []
   - name: seo-researcher
     role: researcher
     template: ../../agent-templates/seo-researcher
     employment: permanent
     mission: "Discover search intent and build a source-traceable research packet."
-    reports_to: operator
-    tags: [dept-seo-editorial-team]
+    reports_to: seo-coordinator
+    tags: [dept-seo-editorial]
     exposes_shared_folder: true
     consumes_shared_folder_from: []
-    may_call: [seo-writer]
+    may_call: [seo-coordinator, seo-writer]
     may_approve: []
   - name: seo-writer
     role: writer
     template: ../../agent-templates/seo-writer
     employment: permanent
     mission: "Create and revise the Japanese SEO draft from approved evidence."
-    reports_to: operator
-    tags: [dept-seo-editorial-team]
+    reports_to: seo-coordinator
+    tags: [dept-seo-editorial]
     consumes_shared_folder_from: seo-researcher
     exposes_shared_folder: true
-    may_call: [seo-researcher, seo-reviewer]
+    may_call: [seo-coordinator, seo-researcher, seo-reviewer]
     may_approve: []
   - name: seo-reviewer
     role: reviewer
     template: ../../agent-templates/seo-reviewer
     employment: permanent
     mission: "Independently gate factual, SEO, language, and compliance quality."
-    reports_to: operator
-    tags: [dept-seo-editorial-team]
+    reports_to: seo-coordinator
+    tags: [dept-seo-editorial]
     consumes_shared_folder_from: seo-writer
-    may_call: [seo-writer]
+    may_call: [seo-coordinator, seo-writer]
     may_approve: [final_handoff]
 
 agents:
   # Compatibility alias for tooling that expects an `agents` collection.
+  - name: seo-coordinator
+    role: coordinator
+    template: ../../agent-templates/seo-coordinator
   - name: seo-researcher
     role: researcher
     template: ../../agent-templates/seo-researcher
@@ -98,22 +112,40 @@ artifacts:
     - templates/review-result.yaml
 
 workflow:
-  entry: seo-researcher
+  entry: seo-coordinator
   terminal_states: [complete, blocked_for_human]
   transitions:
+    - from: seo-coordinator
+      to: seo-researcher
+      message: research_requested
     - from: seo-researcher
-      to: seo-writer
+      to: seo-coordinator
       message: research_packet_ready
-    - from: seo-writer
-      to: seo-reviewer
-      message: draft_ready
-    - from: seo-reviewer
+    - from: seo-coordinator
       to: seo-writer
+      message: draft_requested
+    - from: seo-writer
+      to: seo-coordinator
+      message: draft_ready
+    - from: seo-coordinator
+      to: seo-reviewer
+      message: review_requested
+    - from: seo-reviewer
+      to: seo-coordinator
       message: review_fail
       max_attempts: 3
+    - from: seo-coordinator
+      to: seo-writer
+      message: revision_requested
     - from: seo-reviewer
-      to: operator
+      to: seo-coordinator
       message: blocked_for_human
+    - from: seo-reviewer
+      to: seo-coordinator
+      message: review_pass
+    - from: seo-coordinator
+      to: operator
+      message: final_handoff
 
 communication:
   protocol: trinity-mcp
@@ -123,14 +155,29 @@ communication:
 
 dashboard:
   organization_overlay: enabled
-  department_zone: dept-seo-editorial-team
+  department_zone: dept-seo-editorial
   pipeline_edges:
+    - from: seo-coordinator
+      to: seo-researcher
+      label: research_requested
     - from: seo-researcher
-      to: seo-writer
+      to: seo-coordinator
       label: research_packet_ready
-    - from: seo-writer
-      to: seo-reviewer
-      label: draft_ready
-    - from: seo-reviewer
+    - from: seo-coordinator
       to: seo-writer
+      label: draft_requested
+    - from: seo-writer
+      to: seo-coordinator
+      label: draft_ready
+    - from: seo-coordinator
+      to: seo-reviewer
+      label: review_requested
+    - from: seo-reviewer
+      to: seo-coordinator
       label: review_fail
+    - from: seo-coordinator
+      to: seo-writer
+      label: revision_requested
+    - from: seo-reviewer
+      to: seo-coordinator
+      label: review_pass_or_blocked

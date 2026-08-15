@@ -1,0 +1,25 @@
+title: "SEO Coordinator"
+refresh: 30
+sections:
+  - title: "Coordination"
+    layout: grid
+    columns: 3
+    widgets:
+      - type: status
+        label: "Agent"
+        value: "Ready"
+        color: blue
+      - type: metric
+        label: "Briefs Coordinated"
+        value: 0
+        unit: "briefs"
+      - type: metric
+        label: "Blocked Handoffs"
+        value: 0
+        unit: "cases"
+  - title: "Role"
+    layout: list
+    columns: 1
+    widgets:
+      - type: text
+        content: "Route briefs and track the SEO Editorial workflow. Team entrypoint; no specialist work or approval authority."

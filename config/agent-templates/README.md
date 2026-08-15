@@ -22,11 +22,12 @@ Ready-made starting points for deploying an agent to Trinity. Each subdirectory 
 | `seo-researcher` | Independent SEO evidence and search-intent researcher |
 | `seo-writer` | Independent Japanese SEO writer and revision agent |
 | `seo-reviewer` | Independent SEO factual, quality, and compliance gate |
+| `seo-coordinator` | Team-only SEO workflow coordinator and operator entrypoint |
 
 `scout` → `sage` → `scribe` are designed to work as a **consulting team**: Scout researches into a shared folder, Sage strategizes over it, Scribe writes the deliverable. Deploy them together to see agent-to-agent collaboration.
 
-`seo-researcher` → `seo-writer` → `seo-reviewer` are the independent runtime
-members of the SEO Editorial Team. The deployment manifest is maintained at
+`seo-coordinator` → `seo-researcher` → `seo-writer` → `seo-reviewer` are the
+independent runtime members of the SEO Editorial Team. The deployment manifest is maintained at
 [`config/agent-teams/seo-editorial-team`](../agent-teams/seo-editorial-team).
 
 These are the visible bundled starters. Looking for more? The canonical way to build an agent is the [`abilityai/abilities`](https://github.com/abilityai/abilities) marketplace and its `create-agent` wizards.

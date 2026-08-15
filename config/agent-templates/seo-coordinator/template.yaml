@@ -1,0 +1,19 @@
+name: seo-coordinator
+display_name: "SEO Coordinator"
+description: "Team-only coordinator for the SEO Editorial Department. Routes briefs, tracks workflow, and consolidates outcomes."
+version: "1.0.0"
+hidden: false
+resources:
+  cpu: "2"
+  memory: "4g"
+credentials: {}
+shared_folders:
+  expose: true
+  consume: true
+metrics:
+  - name: briefs_coordinated
+    type: counter
+    description: Briefs routed through the SEO Editorial Team.
+  - name: blocked_handoffs
+    type: counter
+    description: Workflows escalated to the operator after three review failures.
