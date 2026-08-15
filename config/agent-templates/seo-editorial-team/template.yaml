@@ -8,7 +8,7 @@ hidden: false
 resources:
   cpu: "2"
   memory: "4g"
-credentials: []
+credentials: {}
 git:
   push_enabled: false
   commit_paths:
