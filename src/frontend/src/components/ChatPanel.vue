@@ -58,7 +58,7 @@
       <div class="flex items-center space-x-2">
         <!-- Model selector -->
         <div class="w-44">
-          <ModelSelector v-model="selectedModel" compact placeholder="Default model" />
+          <ModelSelector v-model="selectedModel" :runtime="agentRuntime" compact placeholder="Default model" />
         </div>
 
         <!-- New Chat button -->
@@ -176,6 +176,7 @@ import VoiceOverlay from './chat/VoiceOverlay.vue'
 import ModelSelector from './ModelSelector.vue'
 import { getStatusFromStreamEvent, MIN_LABEL_DISPLAY_MS, HEARTBEAT_TIMEOUT_MS } from '../utils/execution-status'
 import { useVoiceSession } from '../composables/useVoiceSession'
+import { isModelCompatibleWithRuntime } from '../utils/runtime-models'
 
 const props = defineProps({
   agentName: {
@@ -185,6 +186,10 @@ const props = defineProps({
   agentStatus: {
     type: String,
     default: 'stopped'
+  },
+  agentRuntime: {
+    type: String,
+    default: 'claude-code'
   },
   // Resume mode props (EXEC-023)
   resumeSessionId: {
@@ -268,7 +273,17 @@ const focusChatInput = () => {
 }
 
 // Model selection
-const selectedModel = ref(localStorage.getItem('trinity_chat_model') || '')
+const chatModelKey = computed(() => `trinity-chat-model-${props.agentName}`)
+const selectedModel = ref('')
+
+watch(
+  [() => props.agentName, () => props.agentRuntime],
+  () => {
+    const savedModel = localStorage.getItem(chatModelKey.value) || localStorage.getItem('trinity_chat_model') || ''
+    selectedModel.value = isModelCompatibleWithRuntime(savedModel, props.agentRuntime) ? savedModel : ''
+  },
+  { immediate: true }
+)
 
 // Playbooks (for empty-state quick actions)
 const playbooks = ref([])
@@ -720,9 +735,9 @@ const handleClickOutside = (event) => {
 // Persist model selection
 watch(selectedModel, (val) => {
   if (val) {
-    localStorage.setItem('trinity_chat_model', val)
+    localStorage.setItem(chatModelKey.value, val)
   } else {
-    localStorage.removeItem('trinity_chat_model')
+    localStorage.removeItem(chatModelKey.value)
   }
 })
 

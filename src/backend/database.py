@@ -2411,8 +2411,11 @@ class DatabaseManager:
     def cleanup_old_rate_limit_events(self):
         return self._subscription_ops.cleanup_old_rate_limit_events()
 
-    def select_best_alternative_subscription(self, current_subscription_id: str):
-        return self._subscription_ops.select_best_alternative_subscription(current_subscription_id)
+    def select_best_alternative_subscription(self, current_subscription_id: str, provider: str = None):
+        return self._subscription_ops.select_best_alternative_subscription(
+            current_subscription_id,
+            provider=provider,
+        )
 
     def get_subscription_usage(self, subscription_id: str):
         """Return rolling usage totals for a subscription (SUB-004)."""

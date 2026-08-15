@@ -671,13 +671,15 @@ class SubscriptionOperations:
 
     def select_best_alternative_subscription(
         self,
-        current_subscription_id: str
+        current_subscription_id: str,
+        provider: Optional[str] = None,
     ) -> Optional[SubscriptionCredential]:
         """
         Select the best alternative subscription for auto-switch.
 
         Strategy:
         - Exclude the current subscription
+        - When provided, restrict candidates to the runtime-compatible provider
         - Skip subscriptions rate-limited in the last 2 hours
         - Prefer subscriptions with fewer assigned agents (load-balance)
 
@@ -696,6 +698,8 @@ class SubscriptionOperations:
             .where(subscription_credentials.c.id != current_subscription_id)
             .order_by(agent_count.asc())
         )
+        if provider:
+            stmt = stmt.where(subscription_credentials.c.provider == provider)
         with get_engine().connect() as conn:
             rows = conn.execute(stmt).mappings().all()
 

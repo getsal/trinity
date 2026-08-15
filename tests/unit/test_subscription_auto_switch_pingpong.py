@@ -74,6 +74,8 @@ def tmp_db(tmp_path, monkeypatch):
             id TEXT PRIMARY KEY,
             name TEXT UNIQUE NOT NULL,
             encrypted_credentials TEXT NOT NULL,
+            provider TEXT,
+            auth_type TEXT,
             subscription_type TEXT,
             rate_limit_tier TEXT,
             owner_id INTEGER NOT NULL,
@@ -121,14 +123,14 @@ def tmp_db(tmp_path, monkeypatch):
     )
     cur.execute(
         "INSERT INTO subscription_credentials "
-        "(id, name, encrypted_credentials, owner_id, created_at, updated_at) "
-        "VALUES ('sub-a', 'sub-A', 'enc-a', 1, ?, ?)",
+        "(id, name, encrypted_credentials, provider, auth_type, owner_id, created_at, updated_at) "
+        "VALUES ('sub-a', 'sub-A', 'enc-a', 'anthropic', 'claude_oauth', 1, ?, ?)",
         (now, now),
     )
     cur.execute(
         "INSERT INTO subscription_credentials "
-        "(id, name, encrypted_credentials, owner_id, created_at, updated_at) "
-        "VALUES ('sub-b', 'sub-B', 'enc-b', 1, ?, ?)",
+        "(id, name, encrypted_credentials, provider, auth_type, owner_id, created_at, updated_at) "
+        "VALUES ('sub-b', 'sub-B', 'enc-b', 'anthropic', 'claude_oauth', 1, ?, ?)",
         (now, now),
     )
     cur.execute(
@@ -223,6 +225,23 @@ class TestPingPongPrevention:
         alt = sub_ops.select_best_alternative_subscription("sub-a")
         assert alt is not None
         assert alt.id == "sub-b"
+
+    def test_provider_filter_excludes_cross_runtime_subscription(self, sub_ops, tmp_db):
+        """A Codex failure must never fall back to an Anthropic subscription."""
+        now = datetime.utcnow().isoformat()
+        conn = sqlite3.connect(str(tmp_db))
+        conn.execute(
+            "INSERT INTO subscription_credentials "
+            "(id, name, encrypted_credentials, provider, auth_type, owner_id, created_at, updated_at) "
+            "VALUES ('sub-openai', 'sub-openai', 'enc-openai', 'openai', 'codex_chatgpt_login', 1, ?, ?)",
+            (now, now),
+        )
+        conn.commit()
+        conn.close()
+
+        alternative = sub_ops.select_best_alternative_subscription("sub-a", provider="openai")
+        assert alternative is not None
+        assert alternative.id == "sub-openai"
 
 
 # =============================================================================
@@ -339,6 +358,7 @@ def _install_database_stub() -> object:
     # Default behaviors — tests override per-fixture
     stub_db.get_setting_value.return_value = "true"
     stub_db.get_agent_subscription_id.return_value = "sub-a"
+    stub_db.get_agent_runtime.return_value = "claude-code"
     stub_db.record_rate_limit_event.return_value = 1
     stub_db.get_subscription.return_value = MagicMock(name="current_sub", name_attr="sub-a")
     # `get_subscription` returns an object with `.name`; MagicMock attribute
@@ -471,6 +491,38 @@ class TestSingleEventThreshold:
         assert result["failure_kind"] == "rate_limit"
         assert len(svc._spy_calls) == 1
         assert svc._spy_calls[0]["event_count"] == 1
+        svc._stub_db.select_best_alternative_subscription.assert_called_once_with(
+            "sub-a", provider="anthropic"
+        )
+
+    @pytest.mark.asyncio
+    async def test_codex_switch_uses_only_openai_subscriptions(self, svc):
+        svc._stub_db.get_agent_runtime.return_value = "codex"
+
+        result = await svc.handle_subscription_failure(
+            agent_name="agent-x",
+            error_message="authentication failed",
+            failure_kind="auth",
+        )
+
+        assert result is not None
+        svc._stub_db.select_best_alternative_subscription.assert_called_once_with(
+            "sub-a", provider="openai"
+        )
+
+    @pytest.mark.asyncio
+    async def test_unknown_runtime_refuses_cross_provider_switch(self, svc):
+        svc._stub_db.get_agent_runtime.return_value = "unknown-runtime"
+
+        result = await svc.handle_subscription_failure(
+            agent_name="agent-x",
+            error_message="authentication failed",
+            failure_kind="auth",
+        )
+
+        assert result is None
+        svc._stub_db.select_best_alternative_subscription.assert_not_called()
+        assert svc._spy_calls == []
 
     @pytest.mark.asyncio
     async def test_first_auth_error_triggers_switch(self, svc):

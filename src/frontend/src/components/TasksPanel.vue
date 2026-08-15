@@ -93,7 +93,7 @@
       <!-- Model & Timeout Selectors -->
       <div class="flex items-center space-x-3 mb-3">
         <div class="flex-1">
-          <ModelSelector v-model="selectedModel" label="Model" compact />
+          <ModelSelector v-model="selectedModel" :runtime="agentRuntime" label="Model" compact />
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Timeout</label>
@@ -548,6 +548,7 @@ import { formatCost, formatCostCompact } from '../composables/useFormatters'
 import ModelSelector from './ModelSelector.vue'
 import LoadFailed from './LoadFailed.vue'
 import { apiErrorMessage } from '../utils/apiError'
+import { defaultModelForRuntime, isModelCompatibleWithRuntime } from '../utils/runtime-models'
 
 // Template ref for highlighted task element
 const highlightedTaskRef = ref(null)
@@ -560,6 +561,10 @@ const props = defineProps({
   agentStatus: {
     type: String,
     default: 'stopped'
+  },
+  agentRuntime: {
+    type: String,
+    default: 'claude-code'
   },
   highlightExecutionId: {
     type: String,
@@ -594,7 +599,17 @@ const triggerFilter = ref('all') // Filter by triggered_by type (AUDIT-001)
 
 // Model selection (MODEL-001)
 const taskModelKey = computed(() => `trinity-task-model-${props.agentName}`)
-const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-sonnet-4-6')
+const selectedModel = ref('')
+watch(
+  [() => props.agentName, () => props.agentRuntime],
+  () => {
+    const savedModel = localStorage.getItem(taskModelKey.value)
+    selectedModel.value = isModelCompatibleWithRuntime(savedModel, props.agentRuntime)
+      ? (savedModel || defaultModelForRuntime(props.agentRuntime))
+      : defaultModelForRuntime(props.agentRuntime)
+  },
+  { immediate: true }
+)
 watch(selectedModel, (val) => {
   localStorage.setItem(taskModelKey.value, val)
 })

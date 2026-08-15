@@ -86,6 +86,22 @@ def _reset_locks_for_test() -> None:
     _AGENT_SWITCH_LOCKS_GUARD = None
 
 
+def subscription_provider_for_runtime(runtime: Optional[str]) -> Optional[str]:
+    """Return the subscription provider accepted by an agent runtime.
+
+    A subscription token is runtime-specific: Codex consumes OpenAI credentials,
+    while Claude Code consumes Anthropic credentials. An unknown runtime must not
+    be auto-switched because choosing a cross-provider credential would leave the
+    container unauthenticated.
+    """
+    normalized = (runtime or "").strip().lower()
+    if normalized == "codex":
+        return "openai"
+    if normalized in {"claude", "claude-code"}:
+        return "anthropic"
+    return None
+
+
 async def handle_subscription_failure(
     agent_name: str,
     error_message: str = "",
@@ -148,11 +164,23 @@ async def handle_subscription_failure(
         )
 
         # 4. Find a viable alternative subscription
-        alternative = db.select_best_alternative_subscription(current_sub_id)
+        runtime = db.get_agent_runtime(agent_name)
+        provider = subscription_provider_for_runtime(runtime)
+        if not provider:
+            logger.warning(
+                f"[SUB-003] Agent '{agent_name}' has unsupported or missing runtime "
+                f"{runtime!r}; refusing to auto-switch subscription"
+            )
+            return None
+
+        alternative = db.select_best_alternative_subscription(
+            current_sub_id,
+            provider=provider,
+        )
         if not alternative:
             logger.warning(
                 f"[SUB-003] Agent '{agent_name}' hit a {failure_kind} failure on "
-                f"subscription {current_sub_id} (event #{consecutive_count}) "
+                f"subscription {current_sub_id} for {provider} (event #{consecutive_count}) "
                 f"but no viable alternative subscription is available"
             )
             return None

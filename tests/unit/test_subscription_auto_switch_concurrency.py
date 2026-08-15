@@ -122,10 +122,11 @@ def _build_db(initial_sub: str, alt_map: dict) -> MagicMock:
     db = MagicMock()
     db.get_setting_value.return_value = "true"
     db.get_agent_subscription_id.side_effect = lambda _agent: state["current"]
+    db.get_agent_runtime.return_value = "claude-code"
     db.record_rate_limit_event.return_value = 1
     db.get_subscription.side_effect = lambda sub_id: _sub(sub_id)
     db.select_best_alternative_subscription.side_effect = (
-        lambda cur: alt_map.get(cur)
+        lambda cur, provider=None: alt_map.get(cur)
     )
     db._state = state  # expose for assertions / the perform spy
     return db
