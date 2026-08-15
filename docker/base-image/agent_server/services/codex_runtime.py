@@ -250,6 +250,18 @@ def _has_subscription_auth(codex_home: str) -> bool:
         return False
 
 
+def _has_codex_account_login(codex_home: str) -> bool:
+    """Return whether Codex has a credential-local account-login file.
+
+    The Codex CLI validates the credential itself. The server deliberately
+    checks only file presence and never reads or exposes its contents.
+    """
+    try:
+        return (Path(codex_home) / "auth.json").is_file()
+    except OSError:  # pragma: no cover - defensive
+        return False
+
+
 def _codex_home() -> str:
     """Non-workspace home for Codex state + the ``-o`` result file.
 
@@ -785,12 +797,12 @@ class CodexRuntime(AgentRuntime):
         # the old unconditional gate 503'd it before the CLI was ever invoked —
         # so the only way to run one was to set a placeholder key purely to get
         # past this check.
-        if not api_key and not _has_subscription_auth(codex_home):
+        if not api_key and not _has_codex_account_login(codex_home):
             raise HTTPException(
                 status_code=503,
                 detail=(
                     "No Codex credentials in agent container: neither an API key "
-                    "(inject OPENAI_API_KEY via credentials) nor a subscription "
+                    "(inject OPENAI_API_KEY via credentials) nor an account "
                     f"auth.json under CODEX_HOME ({codex_home})."
                 ),
             )

@@ -3463,6 +3463,9 @@ def _migrate_portal_chat_state(cursor, conn):
             PRIMARY KEY (client_email, chat_kind, chat_id)
         )
         """
+    )
+    conn.commit()
+
 def _migrate_agent_ownership_runtime(cursor, conn):
     """Persist the selected runtime so container recovery cannot fall back to Claude."""
     _safe_add_column(
