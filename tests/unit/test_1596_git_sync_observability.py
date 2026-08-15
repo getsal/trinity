@@ -64,5 +64,5 @@ class TestDefaultGitignoreConventions:
     def test_still_ignores_credentials_and_content(self):
         # Guard against a copy-paste that drops the pre-existing safety rules.
         from services.git_service import _GITIGNORE_PATTERNS
-        for pat in (".env", ".mcp.json", "content/", "*.pem"):
+        for pat in (".env", ".mcp.json", ".codex/", "content/", "*.pem"):
             assert pat in _GITIGNORE_PATTERNS

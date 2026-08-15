@@ -138,6 +138,7 @@ def calculate_codex_cost(
 
 _API_KEY_VARS = ("OPENAI_API_KEY", "CODEX_API_KEY")
 _AGENT_HOME = "/home/developer"
+_DEFAULT_CODEX_HOME = os.path.join(_AGENT_HOME, ".codex")
 _READ_ONLY_CONFIG = Path(_AGENT_HOME) / ".trinity" / "read-only-config.json"
 
 
@@ -265,16 +266,15 @@ def _has_codex_account_login(codex_home: str) -> bool:
 def _codex_home() -> str:
     """Non-workspace home for Codex state + the ``-o`` result file.
 
-    Codex defaults ``CODEX_HOME`` to ``~/.codex`` — inside the git-tracked agent
-    repo, which would dirty auto-sync. Relocate it under ``$TMPDIR`` (the
-    disk-backed ``/home/developer/.tmp`` scratch dir, #1098) which startup.sh
-    gitignores for Codex agents.
+    Use the standard persistent home rather than ``$TMPDIR``. Recent Codex CLI
+    releases refuse to create helper binaries below a temporary directory.
+    ``.codex/`` is excluded from agent Git sync, and this default matches the
+    credential-scoped ChatGPT account-login volume.
     """
     explicit = os.environ.get("CODEX_HOME")
     if explicit:
         return explicit
-    tmpdir = os.environ.get("TMPDIR") or os.path.join(_AGENT_HOME, ".tmp")
-    return os.path.join(tmpdir, "codex")
+    return _DEFAULT_CODEX_HOME
 
 
 def _ensure_codex_home() -> str:

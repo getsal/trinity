@@ -1277,8 +1277,8 @@ async def test_execute_headless_warns_on_images_and_max_turns(available_runtime,
 
 
 # ---------------------------------------------------------------------------
-# CODEX_HOME resolution — explicit env wins; else under $TMPDIR; else the home
-# default. Kept out of the git-tracked repo so codex state never dirties sync.
+# CODEX_HOME resolution — explicit env wins; otherwise the persistent standard
+# home. Kept out of the git-tracked repo so Codex state never dirties sync.
 # ---------------------------------------------------------------------------
 
 def test_codex_home_prefers_explicit_env(monkeypatch):
@@ -1286,17 +1286,16 @@ def test_codex_home_prefers_explicit_env(monkeypatch):
     assert codex_runtime._codex_home() == "/somewhere/codex-home"
 
 
-def test_codex_home_falls_back_to_tmpdir(monkeypatch):
+def test_codex_home_ignores_tmpdir_fallback(monkeypatch):
     monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.setenv("TMPDIR", "/scratch/tmp")
-    assert codex_runtime._codex_home() == "/scratch/tmp/codex"
+    assert codex_runtime._codex_home() == "/home/developer/.codex"
 
 
-def test_codex_home_falls_back_to_agent_home_tmp(monkeypatch):
+def test_codex_home_falls_back_to_persistent_agent_home(monkeypatch):
     monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.delenv("TMPDIR", raising=False)
-    # _AGENT_HOME/.tmp/codex when neither env is set.
-    assert codex_runtime._codex_home().endswith("/.tmp/codex")
+    assert codex_runtime._codex_home() == "/home/developer/.codex"
 
 
 def test_ensure_codex_home_creates_dir(tmp_path, monkeypatch):

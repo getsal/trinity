@@ -1323,6 +1323,7 @@ _GITIGNORE_PATTERNS: Tuple[str, ...] = (
     # #2070: contents-only, so the authored paths below can be re-included.
     ".trinity/*",
     *(f"!{path}" for path in _TRINITY_AUTHORED_PATHS),
+    ".codex/",  # Codex state/auth/helpers; must stay off agent Git sync
     ".tmp/",  # #1098 disk-backed scratch (TMPDIR); #1187 relocated CODEX_HOME
     ".trinity-clone-tmp/",  # #1439 transient full-history clone staging dir (removed post-merge; ignored so a crash-orphaned copy — incl. its PAT-bearing .git/config — is never committed)
     # Large generated content
