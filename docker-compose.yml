@@ -29,7 +29,7 @@ services:
     container_name: trinity-backend
     logging: *default-logging
     ports:
-      - "8000:8000"
+      - "${BACKEND_HOST_PORT:-8000}:8000"
     environment:
       # SECURITY: Set these in your .env file, not here
       - SECRET_KEY=${SECRET_KEY:-}  # Required - generate with: openssl rand -hex 32
@@ -502,7 +502,7 @@ services:
     container_name: trinity-mcp-server
     logging: *default-logging
     ports:
-      - "8080:8080"
+      - "${MCP_HOST_PORT:-8080}:8080"
     environment:
       - NODE_ENV=production
       - MCP_PORT=8080
@@ -753,4 +753,3 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/16
-
