@@ -23,6 +23,14 @@ Trinity shared folders for research packets, drafts, and review evidence.
 Configure Agent permissions so the Writer can call and consume Researcher
 artifacts, and the Reviewer can call and consume Writer artifacts.
 
+## Department view
+
+Assign the tag `dept-seo-editorial-team` to all three Agents. Trinity's
+Dashboard Grid will render them as one Department zone. The production flow is
+represented by the Team workflow edges; do not model the Reviewer as a
+manager merely because it is the approval gate. If a human or Agent manager is
+added later, use a `reports-to-<agent-name>` tag separately.
+
 ## Workflow
 
 ```text

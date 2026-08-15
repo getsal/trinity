@@ -16,6 +16,9 @@ organization:
   manager: operator
   shared_mission: "Produce evidence-backed Japanese SEO content with an independent review gate."
   member_count: 3
+  department_name: seo-editorial-team
+  department_tag: dept-seo-editorial-team
+  dashboard_view: department_grid
 
 policies:
   role_changes: operator_only
@@ -33,6 +36,7 @@ members:
     employment: permanent
     mission: "Discover search intent and build a source-traceable research packet."
     reports_to: operator
+    tags: [dept-seo-editorial-team]
     exposes_shared_folder: true
     consumes_shared_folder_from: []
     may_call: [seo-writer]
@@ -43,6 +47,7 @@ members:
     employment: permanent
     mission: "Create and revise the Japanese SEO draft from approved evidence."
     reports_to: operator
+    tags: [dept-seo-editorial-team]
     consumes_shared_folder_from: seo-researcher
     exposes_shared_folder: true
     may_call: [seo-researcher, seo-reviewer]
@@ -53,6 +58,7 @@ members:
     employment: permanent
     mission: "Independently gate factual, SEO, language, and compliance quality."
     reports_to: operator
+    tags: [dept-seo-editorial-team]
     consumes_shared_folder_from: seo-writer
     may_call: [seo-writer]
     may_approve: [final_handoff]
@@ -114,3 +120,17 @@ communication:
   tool: chat_with_agent
   permission_model: explicit_agent_permissions
   large_artifacts: shared_folders
+
+dashboard:
+  organization_overlay: enabled
+  department_zone: dept-seo-editorial-team
+  pipeline_edges:
+    - from: seo-researcher
+      to: seo-writer
+      label: research_packet_ready
+    - from: seo-writer
+      to: seo-reviewer
+      label: draft_ready
+    - from: seo-reviewer
+      to: seo-writer
+      label: review_fail
