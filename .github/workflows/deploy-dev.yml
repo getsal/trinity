@@ -1,8 +1,7 @@
 name: Deploy to Dev
 
 on:
-  push:
-    branches: [dev]
+  workflow_dispatch:
 
 # CSO L5: least-privilege token — deploy runs over SSH/Tailscale secrets, not GITHUB_TOKEN.
 permissions:
