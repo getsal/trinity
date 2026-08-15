@@ -1,0 +1,16 @@
+case_id: ""
+status: "research_complete"
+topic: ""
+search_intent: ""
+target_queries: []
+facts: []
+interpretations: []
+open_questions: []
+sources:
+  - url: ""
+    title: ""
+    accessed_at: ""
+    supports: []
+handoff:
+  recipient: seo-writer
+  message: research_packet_ready

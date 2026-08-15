@@ -1,0 +1,25 @@
+title: "SEO Reviewer"
+refresh: 30
+sections:
+  - title: "Review Gate"
+    layout: grid
+    columns: 3
+    widgets:
+      - type: status
+        label: "Agent"
+        value: "Ready"
+        color: blue
+      - type: metric
+        label: "Reviews Completed"
+        value: 0
+        unit: "reviews"
+      - type: metric
+        label: "FAIL Decisions"
+        value: 0
+        unit: "returns"
+  - title: "Decision Rules"
+    layout: list
+    columns: 1
+    widgets:
+      - type: markdown
+        content: "PASS completes the handoff. FAIL returns findings to `seo-writer`. Third FAIL -> `BLOCKED_FOR_HUMAN`."

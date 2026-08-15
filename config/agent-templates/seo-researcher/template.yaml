@@ -1,0 +1,16 @@
+name: seo-researcher
+display_name: "SEO Researcher"
+description: "Independent evidence and search-intent researcher for the SEO Editorial Team."
+version: "1.0.0"
+hidden: false
+resources:
+  cpu: "2"
+  memory: "4g"
+credentials: {}
+shared_folders:
+  expose: true
+  consume: false
+metrics:
+  - name: research_packets_completed
+    type: counter
+    description: Research packets delivered to the Writer.

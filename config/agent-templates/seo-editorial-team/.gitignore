@@ -1,9 +1,0 @@
-.env
-.mcp.json
-*.log
-.DS_Store
-.cache/
-.tmp/
-tmp/
-__pycache__/
-node_modules/

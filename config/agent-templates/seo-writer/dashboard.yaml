@@ -1,0 +1,25 @@
+title: "SEO Writer"
+refresh: 30
+sections:
+  - title: "Writing"
+    layout: grid
+    columns: 3
+    widgets:
+      - type: status
+        label: "Agent"
+        value: "Ready"
+        color: blue
+      - type: metric
+        label: "Drafts Completed"
+        value: 0
+        unit: "drafts"
+      - type: metric
+        label: "Review Attempts"
+        value: 0
+        unit: "attempts"
+  - title: "Role"
+    layout: list
+    columns: 1
+    widgets:
+      - type: text
+        content: "Draft and revise from evidence. Handoff: draft_ready -> seo-reviewer."

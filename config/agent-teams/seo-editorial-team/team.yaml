@@ -1,0 +1,38 @@
+name: seo-editorial-team
+display_name: "SEO Editorial Team"
+description: "Three independent Trinity agents coordinated as a bounded SEO production team."
+
+agents:
+  - name: seo-researcher
+    role: researcher
+    template: ../../agent-templates/seo-researcher
+    exposes_shared_folder: true
+  - name: seo-writer
+    role: writer
+    template: ../../agent-templates/seo-writer
+    consumes_shared_folder_from: seo-researcher
+    exposes_shared_folder: true
+  - name: seo-reviewer
+    role: reviewer
+    template: ../../agent-templates/seo-reviewer
+    consumes_shared_folder_from: seo-writer
+
+workflow:
+  - from: seo-researcher
+    to: seo-writer
+    message: research_packet_ready
+  - from: seo-writer
+    to: seo-reviewer
+    message: draft_ready
+  - from: seo-reviewer
+    to: seo-writer
+    message: review_fail
+    max_attempts: 3
+  - from: seo-reviewer
+    to: operator
+    message: blocked_for_human
+
+communication:
+  protocol: trinity-mcp
+  tool: chat_with_agent
+  large_artifacts: shared_folders

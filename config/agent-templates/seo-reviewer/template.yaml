@@ -1,0 +1,19 @@
+name: seo-reviewer
+display_name: "SEO Reviewer"
+description: "Independent factual, SEO, quality, and compliance reviewer for the SEO Editorial Team."
+version: "1.0.0"
+hidden: false
+resources:
+  cpu: "2"
+  memory: "4g"
+credentials: {}
+shared_folders:
+  expose: false
+  consume: true
+metrics:
+  - name: reviews_completed
+    type: counter
+    description: Draft reviews completed.
+  - name: review_failures
+    type: counter
+    description: FAIL decisions returned to the Writer.

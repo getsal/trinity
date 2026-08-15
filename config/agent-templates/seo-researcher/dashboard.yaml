@@ -1,0 +1,21 @@
+title: "SEO Researcher"
+refresh: 30
+sections:
+  - title: "Research"
+    layout: grid
+    columns: 2
+    widgets:
+      - type: status
+        label: "Agent"
+        value: "Ready"
+        color: blue
+      - type: metric
+        label: "Packets Completed"
+        value: 0
+        unit: "packets"
+  - title: "Role"
+    layout: list
+    columns: 1
+    widgets:
+      - type: text
+        content: "Collect evidence and search intent. Handoff: research_packet_ready -> seo-writer."

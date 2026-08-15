@@ -1,0 +1,8 @@
+case_id: ""
+status: "writing"
+review_attempt: 0
+max_review_attempts: 3
+research_packet: ""
+draft_path: ""
+last_review_path: ""
+next_agent: seo-reviewer

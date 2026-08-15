@@ -1,0 +1,19 @@
+name: seo-writer
+display_name: "SEO Writer"
+description: "Independent Japanese SEO writer that drafts and revises from research packets."
+version: "1.0.0"
+hidden: false
+resources:
+  cpu: "2"
+  memory: "4g"
+credentials: {}
+shared_folders:
+  expose: true
+  consume: true
+metrics:
+  - name: drafts_completed
+    type: counter
+    description: Drafts delivered to the Reviewer.
+  - name: revisions_completed
+    type: counter
+    description: Draft revisions completed after review feedback.
