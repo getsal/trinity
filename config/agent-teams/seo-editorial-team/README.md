@@ -6,9 +6,15 @@ This is a deployment manifest for three independent Trinity-compatible agents:
 2. `seo-writer` — Japanese SEO draft and revisions.
 3. `seo-reviewer` — factual, SEO, quality, and compliance gate.
 
-The team is an installation and coordination unit, not an execution container.
-Each role has its own `template.yaml`, `CLAUDE.md`, `AGENTS.md`, skills,
-commands, workspace, and Trinity lifecycle.
+The team is an organization and execution boundary, not a single execution
+container. Members are permanent department roles and must not be deployed as
+standalone general-purpose Agents. Each role has its own `template.yaml`,
+`CLAUDE.md`, `AGENTS.md`, skills, commands, workspace, and Trinity lifecycle.
+
+Individual customization is allowed for domain prompts, approved tools,
+resource limits, dashboard widgets, and local skill extensions. Role identity,
+workflow edges, approval authority, evidence preservation, and the three-attempt
+retry limit are Team policies and require operator changes.
 
 ## Communication
 

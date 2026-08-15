@@ -1,38 +1,116 @@
+manifest_version: 1
+kind: trinity-agent-team
 name: seo-editorial-team
 display_name: "SEO Editorial Team"
-description: "Three independent Trinity agents coordinated as a bounded SEO production team."
+description: "A permanent three-agent SEO editorial department. Members operate only within this team."
 
-agents:
+execution:
+  mode: team_only
+  standalone_deploy: prohibited
+  standalone_tasks: prohibited
+  requires_team_context: true
+  operator_entrypoint: seo-researcher
+
+organization:
+  model: fixed_department
+  manager: operator
+  shared_mission: "Produce evidence-backed Japanese SEO content with an independent review gate."
+  member_count: 3
+
+policies:
+  role_changes: operator_only
+  workflow_changes: operator_only
+  approval_authority: seo-reviewer
+  final_handoff_authority: seo-reviewer
+  human_escalation_after_attempts: 3
+  no_self_approval: true
+  preserve_research_evidence: true
+
+members:
   - name: seo-researcher
     role: researcher
     template: ../../agent-templates/seo-researcher
+    employment: permanent
+    mission: "Discover search intent and build a source-traceable research packet."
+    reports_to: operator
     exposes_shared_folder: true
+    consumes_shared_folder_from: []
+    may_call: [seo-writer]
+    may_approve: []
   - name: seo-writer
     role: writer
     template: ../../agent-templates/seo-writer
+    employment: permanent
+    mission: "Create and revise the Japanese SEO draft from approved evidence."
+    reports_to: operator
     consumes_shared_folder_from: seo-researcher
     exposes_shared_folder: true
+    may_call: [seo-researcher, seo-reviewer]
+    may_approve: []
   - name: seo-reviewer
     role: reviewer
     template: ../../agent-templates/seo-reviewer
+    employment: permanent
+    mission: "Independently gate factual, SEO, language, and compliance quality."
+    reports_to: operator
     consumes_shared_folder_from: seo-writer
+    may_call: [seo-writer]
+    may_approve: [final_handoff]
+
+agents:
+  # Compatibility alias for tooling that expects an `agents` collection.
+  - name: seo-researcher
+    role: researcher
+    template: ../../agent-templates/seo-researcher
+  - name: seo-writer
+    role: writer
+    template: ../../agent-templates/seo-writer
+  - name: seo-reviewer
+    role: reviewer
+    template: ../../agent-templates/seo-reviewer
+
+customization:
+  allowed_per_member:
+    - domain_prompt_additions
+    - approved_tools
+    - resource_limits
+    - dashboard_widgets
+    - local_skill_extensions
+  locked_by_team:
+    - role
+    - workflow_edges
+    - approval_authority
+    - retry_limit
+    - evidence_preservation
+
+artifacts:
+  transport: shared_folders
+  control_messages: trinity_mcp
+  contracts:
+    - templates/research-packet.yaml
+    - templates/case-state.yaml
+    - templates/review-result.yaml
 
 workflow:
-  - from: seo-researcher
-    to: seo-writer
-    message: research_packet_ready
-  - from: seo-writer
-    to: seo-reviewer
-    message: draft_ready
-  - from: seo-reviewer
-    to: seo-writer
-    message: review_fail
-    max_attempts: 3
-  - from: seo-reviewer
-    to: operator
-    message: blocked_for_human
+  entry: seo-researcher
+  terminal_states: [complete, blocked_for_human]
+  transitions:
+    - from: seo-researcher
+      to: seo-writer
+      message: research_packet_ready
+    - from: seo-writer
+      to: seo-reviewer
+      message: draft_ready
+    - from: seo-reviewer
+      to: seo-writer
+      message: review_fail
+      max_attempts: 3
+    - from: seo-reviewer
+      to: operator
+      message: blocked_for_human
 
 communication:
   protocol: trinity-mcp
   tool: chat_with_agent
+  permission_model: explicit_agent_permissions
   large_artifacts: shared_folders
